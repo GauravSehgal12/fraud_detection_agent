@@ -36,3 +36,20 @@ def make_risk_decision(
         "risk_level": risk_level,
         "decision": decision,
     }
+
+
+def build_risk_assessment(
+    transaction_id: int,
+    probability: float,
+    evidence: list[dict]
+) -> dict:
+
+    decision = make_risk_decision(
+        probability
+    )
+
+    return {
+        "transaction_id": int(transaction_id),
+        **decision,
+        "evidence": evidence
+    }
