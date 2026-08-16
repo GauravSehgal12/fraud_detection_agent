@@ -11,3 +11,28 @@ def classify_risk(
     return "LOW"
 
 
+def make_risk_decision(
+    probability: float
+) -> dict:
+
+    risk_level = classify_risk(
+        probability
+    )
+
+    if risk_level == "HIGH":
+        decision = "REVIEW"
+
+    elif risk_level == "MEDIUM":
+        decision = "MONITOR"
+
+    else:
+        decision = "APPROVE"
+
+    return {
+        "risk_score": round(
+            float(probability),
+            4
+        ),
+        "risk_level": risk_level,
+        "decision": decision,
+    }
