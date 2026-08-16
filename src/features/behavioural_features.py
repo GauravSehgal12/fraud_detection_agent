@@ -45,3 +45,25 @@ def add_card_behavior_features(df: pd.DataFrame) -> pd.DataFrame:
     ).astype("int8")
 
     return df
+
+def add_card_velocity_features(df: pd.DataFrame) -> pd.DataFrame:
+
+    df = df.sort_values(
+        ["card1", "TransactionDT"]
+    ).copy()
+
+    def _card_txn_count_1h(group: pd.DataFrame) -> pd.Series:
+        return (
+            group.set_index("TransactionDT")["TransactionID"]
+            .rolling("1h")
+            .count()
+            .shift(1)
+        )
+
+    df["card_txn_count_1h"] = (
+        df.groupby("card1", group_keys=False)
+        .apply(_card_txn_count_1h)
+        .reset_index(level=0, drop=True)
+    )
+
+    return df
