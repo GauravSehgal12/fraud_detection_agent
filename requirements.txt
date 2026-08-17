@@ -14,5 +14,6 @@ shap==0.48.0
 joblib==1.5.1
 
 groq
-
+fastapi
+uvicorn
 python-dotenv==1.1.1
