@@ -53,55 +53,67 @@ class RiskEngine:
         """
         Risk engine for fraud prediction.
 
-        Supports two types of transactions:
+        Supports:
 
         1. Existing transaction:
-           calculate_risk(transaction_id)
+
+            calculate_risk(3409570)
 
         2. New transaction:
-           calculate_risk(transaction_dict)
 
-        For an existing transaction, features are read
-        from the feature store.
+            calculate_risk({
+                "TransactionID": 999999999,
+                "TransactionDT": 10699419,
+                "TransactionAmt": 87.302,
+                "card1": 12730,
+                "DeviceInfo":
+                    "LG-D320 Build/KOT49I.V10a"
+            })
 
-        For a new transaction, features are generated
-        using TransactionFeatureBuilder.
+        Existing transactions use the persisted
+        feature store.
+
+        New transactions use TransactionFeatureBuilder.
         """
 
         self.model = model
 
-        # -------------------------------------------------
-        # Existing feature store
-        # -------------------------------------------------
+        # =====================================================
+        # EXISTING FEATURE STORE
+        # =====================================================
 
         self.feature_store = pd.read_csv(
             FEATURE_STORE_PATH
         )
 
-        # -------------------------------------------------
-        # Optional feature builder
-        # -------------------------------------------------
+        # =====================================================
+        # FEATURE BUILDER
+        # =====================================================
 
         self.feature_builder = (
             feature_builder
         )
 
-        # -------------------------------------------------
-        # SHAP explainer
-        # -------------------------------------------------
+        # =====================================================
+        # SHAP
+        # =====================================================
 
         self.explainer = shap.TreeExplainer(
             self.model
         )
 
-    # =====================================================
+    # =========================================================
     # EXISTING TRANSACTION
-    # =====================================================
+    # =========================================================
 
     def get_transaction(
         self,
         transaction_id: int,
     ):
+        """
+        Get an existing transaction from the
+        persisted feature store.
+        """
 
         matches = self.feature_store[
             self.feature_store[
@@ -111,13 +123,14 @@ class RiskEngine:
         ]
 
         if matches.empty:
+
             return None
 
         return matches.iloc[0]
 
-    # =====================================================
-    # BUILD MODEL INPUT
-    # =====================================================
+    # =========================================================
+    # MODEL INPUT
+    # =========================================================
 
     def _prepare_model_input(
         self,
@@ -127,6 +140,10 @@ class RiskEngine:
         Convert generated features into the exact
         dataframe expected by XGBoost.
         """
+
+        # -----------------------------------------------------
+        # Validate all 21 features
+        # -----------------------------------------------------
 
         missing_features = [
             feature
@@ -141,36 +158,42 @@ class RiskEngine:
                 f"{missing_features}"
             )
 
+        # -----------------------------------------------------
+        # Create model dataframe
+        # -----------------------------------------------------
+
         X = pd.DataFrame(
             [
                 {
-                    feature: features[feature]
+                    feature: features[
+                        feature
+                    ]
                     for feature in FEATURE_COLUMNS
                 }
             ],
             columns=FEATURE_COLUMNS,
         )
 
-        # -------------------------------------------------
-        # Ensure numeric
-        # -------------------------------------------------
+        # -----------------------------------------------------
+        # Convert everything to numeric
+        # -----------------------------------------------------
 
         X = X.apply(
             pd.to_numeric,
-            errors="coerce"
+            errors="coerce",
         )
 
-        # -------------------------------------------------
-        # Model cannot receive NaN
-        # -------------------------------------------------
+        # -----------------------------------------------------
+        # XGBoost cannot receive NaN
+        # -----------------------------------------------------
 
         X = X.fillna(0)
 
         return X
 
-    # =====================================================
+    # =========================================================
     # RISK CALCULATION
-    # =====================================================
+    # =========================================================
 
     def calculate_risk(
         self,
@@ -181,29 +204,29 @@ class RiskEngine:
 
         Accepts either:
 
-        transaction ID:
+        Existing transaction:
 
             calculate_risk(3409570)
 
-        OR a completely new transaction:
+        OR new transaction:
 
             calculate_risk({
-                "TransactionID": 1234567,
+                "TransactionID": 999999999,
                 "TransactionDT": 10699419,
                 "TransactionAmt": 87.302,
                 "card1": 12730,
-                ...
+                "DeviceInfo":
+                    "LG-D320 Build/KOT49I.V10a"
             })
         """
 
-        # =================================================
-        # CASE 1:
-        # Existing transaction ID
-        # =================================================
+        # =====================================================
+        # CASE 1: EXISTING TRANSACTION
+        # =====================================================
 
         if isinstance(
             transaction,
-            int
+            int,
         ):
 
             transaction_id = transaction
@@ -225,6 +248,10 @@ class RiskEngine:
                         transaction_id,
                 }
 
+            # -------------------------------------------------
+            # Extract the 21 persisted features
+            # -------------------------------------------------
+
             features = {
                 feature:
                     existing_transaction[
@@ -233,14 +260,13 @@ class RiskEngine:
                 for feature in FEATURE_COLUMNS
             }
 
-        # =================================================
-        # CASE 2:
-        # New transaction dictionary
-        # =================================================
+        # =====================================================
+        # CASE 2: NEW TRANSACTION
+        # =====================================================
 
         elif isinstance(
             transaction,
-            dict
+            dict,
         ):
 
             transaction_id = transaction.get(
@@ -250,9 +276,8 @@ class RiskEngine:
             if transaction_id is None:
 
                 return {
-                    "error": (
+                    "error":
                         "TransactionID is required."
-                    )
                 }
 
             if self.feature_builder is None:
@@ -268,10 +293,66 @@ class RiskEngine:
 
             try:
 
+                # -------------------------------------------------
+                # Generate the exact same 21 features used
+                # by the notebook.
+                # -------------------------------------------------
+
                 features = (
                     self.feature_builder.build(
                         transaction
                     )
+                )
+
+                # =================================================
+                # DEBUG
+                # =================================================
+
+                print(
+                    "\n"
+                    "========== FEATURE DEBUG =========="
+                )
+
+                print(
+                    "Transaction ID:",
+                    transaction_id,
+                )
+
+                print(
+                    "Input transaction:"
+                )
+
+                print(
+                    transaction
+                )
+
+                print(
+                    "\nGenerated features:"
+                )
+
+                for feature in FEATURE_COLUMNS:
+
+                    print(
+                        f"{feature}: "
+                        f"{features.get(feature)}"
+                    )
+
+                print(
+                    "\nMissing model features:"
+                )
+
+                print(
+                    [
+                        feature
+                        for feature
+                        in FEATURE_COLUMNS
+                        if feature
+                        not in features
+                    ]
+                )
+
+                print(
+                    "===================================\n"
                 )
 
             except Exception as exc:
@@ -287,9 +368,9 @@ class RiskEngine:
                         str(exc),
                 }
 
-        # =================================================
+        # =====================================================
         # INVALID INPUT
-        # =================================================
+        # =====================================================
 
         else:
 
@@ -301,9 +382,9 @@ class RiskEngine:
                 )
             }
 
-        # =================================================
-        # Prepare XGBoost input
-        # =================================================
+        # =====================================================
+        # PREPARE MODEL INPUT
+        # =====================================================
 
         try:
 
@@ -324,9 +405,64 @@ class RiskEngine:
                     str(exc),
             }
 
-        # =================================================
+        # =====================================================
+        # DEBUG MODEL INPUT
+        # =====================================================
+
+        if isinstance(
+            transaction,
+            dict,
+        ):
+
+            print(
+                "\n"
+                "========== MODEL INPUT =========="
+            )
+
+            print(X.to_string())
+
+            print(
+                "\nmissing_value_count:",
+                X.iloc[0][
+                    "missing_value_count"
+                ],
+            )
+
+            print(
+                "card_transaction_count:",
+                X.iloc[0][
+                    "card_transaction_count"
+                ],
+            )
+
+            print(
+                "device_profile_count:",
+                X.iloc[0][
+                    "device_profile_count"
+                ],
+            )
+
+            print(
+                "device_profile_unique_cards:",
+                X.iloc[0][
+                    "device_profile_unique_cards"
+                ],
+            )
+
+            print(
+                "device_unique_cards_historical:",
+                X.iloc[0][
+                    "device_unique_cards_historical"
+                ],
+            )
+
+            print(
+                "=================================\n"
+            )
+
+        # =====================================================
         # XGBOOST PREDICTION
-        # =================================================
+        # =====================================================
 
         try:
 
@@ -339,18 +475,17 @@ class RiskEngine:
         except Exception as exc:
 
             return {
-                "error": (
-                    "Model prediction failed."
-                ),
+                "error":
+                    "Model prediction failed.",
                 "transaction_id":
                     transaction_id,
                 "details":
                     str(exc),
             }
 
-        # =================================================
+        # =====================================================
         # RISK LEVEL
-        # =================================================
+        # =====================================================
 
         if risk_score >= 0.90:
 
@@ -367,9 +502,9 @@ class RiskEngine:
             risk_level = "LOW"
             decision = "APPROVE"
 
-        # =================================================
+        # =====================================================
         # SHAP
-        # =================================================
+        # =====================================================
 
         try:
 
@@ -379,13 +514,13 @@ class RiskEngine:
                 )
             )
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Handle different SHAP output formats
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             if isinstance(
                 shap_values,
-                list
+                list,
             ):
 
                 shap_values = (
@@ -401,7 +536,7 @@ class RiskEngine:
             for (
                 feature,
                 value,
-                shap_value
+                shap_value,
             ) in zip(
                 FEATURE_COLUMNS,
                 X.iloc[0].values,
@@ -430,9 +565,9 @@ class RiskEngine:
                     }
                 )
 
-            # ---------------------------------------------
+            # -------------------------------------------------
             # Strongest contributors first
-            # ---------------------------------------------
+            # -------------------------------------------------
 
             evidence.sort(
                 key=lambda item:
@@ -444,8 +579,9 @@ class RiskEngine:
 
         except Exception as exc:
 
-            # SHAP failure should not prevent
-            # risk prediction from being returned.
+            # -------------------------------------------------
+            # SHAP failure should not prevent risk prediction
+            # -------------------------------------------------
 
             evidence = [
                 {
@@ -466,19 +602,18 @@ class RiskEngine:
                 }
             ]
 
-        # =================================================
+        # =====================================================
         # FINAL RESULT
-        # =================================================
+        # =====================================================
 
         return {
-
             "transaction_id":
                 int(transaction_id),
 
             "risk_score":
                 round(
                     risk_score,
-                    4
+                    4,
                 ),
 
             "risk_level":

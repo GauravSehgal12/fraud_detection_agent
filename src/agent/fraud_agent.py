@@ -20,7 +20,7 @@ def build_llm_context(
     return json.dumps(
         investigation,
         indent=2,
-        default=str
+        default=str,
     )
 
 
@@ -50,76 +50,280 @@ class FraudInvestigationAgent:
 
     def investigate(
         self,
-        transaction_id: int
+        transaction: int | dict[str, Any],
     ) -> dict[str, Any]:
         """
         Collect deterministic evidence for a transaction.
 
+        Supports:
+
+        1. Existing transaction:
+
+            investigate(3409570)
+
+        2. New transaction:
+
+            investigate({
+                "TransactionID": 999999999,
+                ...
+            })
+
         The LLM is NOT involved in this step.
         """
 
-        # -----------------------------------------
-        # 1. Get transaction
-        # -----------------------------------------
+        # =================================================
+        # EXISTING TRANSACTION
+        # =================================================
 
-        transaction = self.tools.get_transaction(
-            transaction_id
-        )
+        if isinstance(
+            transaction,
+            int,
+        ):
 
-        if "error" in transaction:
-            return transaction
-
-        # -----------------------------------------
-        # 2. Dynamic risk assessment
-        # -----------------------------------------
-
-        risk_assessment = (
-            self.tools.get_risk_assessment(
-                transaction_id
+            transaction_id = (
+                self.input_guardrail
+                .validate_transaction_id(
+                    transaction
+                )
             )
-        )
 
-        if "error" in risk_assessment:
-            return risk_assessment
+            # ---------------------------------------------
+            # 1. Get transaction
+            # ---------------------------------------------
 
-        # -----------------------------------------
-        # 3. Card history
-        # -----------------------------------------
-
-        card_history = (
-            self.tools.get_card_history(
-                transaction_id
+            transaction_data = (
+                self.tools.get_transaction(
+                    transaction_id
+                )
             )
-        )
 
-        if "error" in card_history:
-            return card_history
+            if (
+                isinstance(
+                    transaction_data,
+                    dict,
+                )
+                and "error"
+                in transaction_data
+            ):
+                return transaction_data
 
-        # -----------------------------------------
-        # 4. Device history
-        # -----------------------------------------
+            # ---------------------------------------------
+            # 2. Risk assessment
+            # ---------------------------------------------
 
-        device_history = (
-            self.tools.get_device_history(
-                transaction_id
+            risk_assessment = (
+                self.tools.get_risk_assessment(
+                    transaction_id
+                )
             )
-        )
 
-        if "error" in device_history:
-            return device_history
+            if (
+                isinstance(
+                    risk_assessment,
+                    dict,
+                )
+                and "error"
+                in risk_assessment
+            ):
+                return risk_assessment
 
-        # -----------------------------------------
-        # 5. Return deterministic investigation
-        # -----------------------------------------
+            # ---------------------------------------------
+            # 3. Card history
+            # ---------------------------------------------
+
+            card_history = (
+                self.tools.get_card_history(
+                    transaction_id
+                )
+            )
+
+            if (
+                isinstance(
+                    card_history,
+                    dict,
+                )
+                and "error"
+                in card_history
+            ):
+                return card_history
+
+            # ---------------------------------------------
+            # 4. Device history
+            # ---------------------------------------------
+
+            device_history = (
+                self.tools.get_device_history(
+                    transaction_id
+                )
+            )
+
+            if (
+                isinstance(
+                    device_history,
+                    dict,
+                )
+                and "error"
+                in device_history
+            ):
+                return device_history
+
+            return {
+                "transaction":
+                    transaction_data,
+
+                "risk_assessment":
+                    risk_assessment,
+
+                "card_history":
+                    card_history,
+
+                "device_history":
+                    device_history,
+            }
+
+        # =================================================
+        # NEW TRANSACTION
+        # =================================================
+
+        if isinstance(
+            transaction,
+            dict,
+        ):
+
+            transaction_id = transaction.get(
+                "TransactionID"
+            )
+
+            if transaction_id is None:
+
+                return {
+                    "error":
+                        "TransactionID is required."
+                }
+
+            try:
+
+                transaction_id = (
+                    self.input_guardrail
+                    .validate_transaction_id(
+                        int(transaction_id)
+                    )
+                )
+
+            except Exception as exc:
+
+                return {
+                    "error":
+                        f"Invalid TransactionID: {exc}"
+                }
+
+            # ---------------------------------------------
+            # NEW TRANSACTION
+            #
+            # The tools layer must handle the dictionary
+            # for dynamic feature generation.
+            # ---------------------------------------------
+
+            transaction_data = (
+                self.tools.get_transaction(
+                    transaction
+                )
+            )
+
+            if (
+                isinstance(
+                    transaction_data,
+                    dict,
+                )
+                and "error"
+                in transaction_data
+            ):
+                return transaction_data
+
+            # ---------------------------------------------
+            # Dynamic risk assessment
+            # ---------------------------------------------
+
+            risk_assessment = (
+                self.tools.get_risk_assessment(
+                    transaction
+                )
+            )
+
+            if (
+                isinstance(
+                    risk_assessment,
+                    dict,
+                )
+                and "error"
+                in risk_assessment
+            ):
+                return risk_assessment
+
+            # ---------------------------------------------
+            # Card history
+            # ---------------------------------------------
+
+            card_history = (
+                self.tools.get_card_history(
+                    transaction
+                )
+            )
+
+            if (
+                isinstance(
+                    card_history,
+                    dict,
+                )
+                and "error"
+                in card_history
+            ):
+                return card_history
+
+            # ---------------------------------------------
+            # Device history
+            # ---------------------------------------------
+
+            device_history = (
+                self.tools.get_device_history(
+                    transaction
+                )
+            )
+
+            if (
+                isinstance(
+                    device_history,
+                    dict,
+                )
+                and "error"
+                in device_history
+            ):
+                return device_history
+
+            return {
+                "transaction":
+                    transaction_data,
+
+                "risk_assessment":
+                    risk_assessment,
+
+                "card_history":
+                    card_history,
+
+                "device_history":
+                    device_history,
+            }
+
+        # =================================================
+        # INVALID INPUT
+        # =================================================
 
         return {
-            "transaction": transaction,
-
-            "risk_assessment": risk_assessment,
-
-            "card_history": card_history,
-
-            "device_history": device_history
+            "error": (
+                "Transaction must be either "
+                "an integer transaction ID or "
+                "a transaction dictionary."
+            )
         }
 
     # =====================================================
@@ -128,49 +332,42 @@ class FraudInvestigationAgent:
 
     def generate_report(
         self,
-        transaction_id: int
+        transaction: int | dict[str, Any],
     ) -> str:
         """
         Generate a human-readable fraud investigation
         report using the LLM.
 
-        The LLM only receives evidence collected
-        by the deterministic investigation layer.
+        Supports both existing and new transactions.
         """
 
-        # -----------------------------------------
-        # 1. Validate transaction ID
-        # -----------------------------------------
-
-        transaction_id = (
-            self.input_guardrail
-            .validate_transaction_id(
-                transaction_id
-            )
-        )
-
-        # -----------------------------------------
-        # 2. Collect investigation evidence
-        # -----------------------------------------
+        # ---------------------------------------------
+        # Collect deterministic evidence
+        # ---------------------------------------------
 
         investigation = self.investigate(
-            transaction_id
+            transaction
         )
 
+        # ---------------------------------------------
+        # Handle investigation error
+        # ---------------------------------------------
+
         if "error" in investigation:
+
             return investigation["error"]
 
-        # -----------------------------------------
-        # 3. Convert evidence to LLM context
-        # -----------------------------------------
+        # ---------------------------------------------
+        # Convert evidence to LLM context
+        # ---------------------------------------------
 
         context = build_llm_context(
             investigation
         )
 
-        # -----------------------------------------
-        # 4. Generate report
-        # -----------------------------------------
+        # ---------------------------------------------
+        # Generate report
+        # ---------------------------------------------
 
         report = self.llm.generate(
             system_prompt=INVESTIGATION_PROMPT,
@@ -188,21 +385,22 @@ class FraudInvestigationAgent:
                 "not present in the supplied data.\n\n"
 
                 f"{context}"
-            )
+            ),
         )
 
-        # -----------------------------------------
-        # 5. Validate LLM output
-        # -----------------------------------------
+        # ---------------------------------------------
+        # Validate LLM output
+        # ---------------------------------------------
 
         validated_report = (
             self.guardrail.validate(
                 report=report,
+
                 risk_assessment=(
                     investigation[
                         "risk_assessment"
                     ]
-                )
+                ),
             )
         )
 

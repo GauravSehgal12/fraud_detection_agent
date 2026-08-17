@@ -21,13 +21,25 @@ async def lifespan(app: FastAPI):
         "Starting Financial Fraud Risk API..."
     )
 
-    # -----------------------------------------
-    # 1. Load persisted model and data
-    # -----------------------------------------
+    # =====================================================
+    # 1. LOAD MODEL AND DATA
+    # =====================================================
 
     container.load_all()
 
+    # -----------------------------------------------------
+    # Get data from container
+    # -----------------------------------------------------
+
     features = container.features
+
+    transactions = (
+        container.transactions
+    )
+
+    identity = (
+        container.identity
+    )
 
     investigation_history = (
         container.investigation_history
@@ -37,12 +49,27 @@ async def lifespan(app: FastAPI):
         container.risk_assessments
     )
 
+    # =====================================================
+    # 2. STARTUP INFORMATION
+    # =====================================================
+
     print(
-        "XGBoost model loaded."
+        "\n========== APPLICATION DATA =========="
     )
 
     print(
-        f"Features loaded: {len(features)}"
+        f"Features loaded: "
+        f"{len(features)}"
+    )
+
+    print(
+        "Raw transactions + identity loaded: "
+        f"{transactions.shape}"
+    )
+
+    print(
+        "Identity loaded: "
+        f"{identity.shape}"
     )
 
     print(
@@ -55,84 +82,106 @@ async def lifespan(app: FastAPI):
         f"{len(risk_assessments)}"
     )
 
-    # -----------------------------------------
-    # 2. Create investigation tools
-    # -----------------------------------------
+    print(
+        "======================================\n"
+    )
+
+    # =====================================================
+    # 3. CREATE INVESTIGATION TOOLS
+    # =====================================================
 
     tools = FraudInvestigationTools(
-    transactions=investigation_history,
-    risk_assessments=risk_assessments,
-    model=container.model
-)
+        transactions=transactions,
+        identity=identity,
+        risk_assessments=risk_assessments,
+        model=container.model,
+    )
+
     print(
         "Investigation tools initialized."
     )
 
-    # -----------------------------------------
-    # 3. Create LLM
-    # -----------------------------------------
+    # =====================================================
+    # 4. CREATE LLM
+    # =====================================================
 
     llm = FraudLLM()
 
     print(
-        f"LLM initialized: {llm.model}"
+        f"LLM initialized: "
+        f"{llm.model}"
     )
 
-    # -----------------------------------------
-    # 4. Create Fraud Agent
-    # -----------------------------------------
+    # =====================================================
+    # 5. CREATE FRAUD AGENT
+    # =====================================================
 
     agent = FraudInvestigationAgent(
         tools=tools,
-        llm=llm
+        llm=llm,
     )
 
     print(
         "Fraud Investigation Agent initialized."
     )
 
-    # -----------------------------------------
-    # 5. Register agent with API
-    # -----------------------------------------
+    # =====================================================
+    # 6. REGISTER AGENT
+    # =====================================================
 
     set_agent(agent)
 
     container.agent = agent
 
     print(
-        "Financial Fraud Risk API is ready."
+        "\nFinancial Fraud Risk API is ready."
     )
 
     yield
 
-    # -----------------------------------------
-    # Shutdown
-    # -----------------------------------------
+    # =====================================================
+    # SHUTDOWN
+    # =====================================================
 
     print(
         "Shutting down Financial Fraud Risk API..."
     )
 
 
+# =========================================================
+# FASTAPI APPLICATION
+# =========================================================
+
 app = FastAPI(
     title=(
         "Financial Fraud Risk & "
         "Investigation API"
     ),
+
     version="1.0.0",
+
     description=(
         "Production-oriented financial fraud "
         "risk detection and investigation service."
     ),
-    lifespan=lifespan
+
+    lifespan=lifespan,
 )
 
+
+# =========================================================
+# ROUTES
+# =========================================================
 
 app.include_router(
     router,
-    prefix="/api/v1"
+    prefix="/api/v1",
 )
 
+
+# =========================================================
+# ROOT
+# =========================================================
 
 @app.get("/")
 def root():
@@ -142,6 +191,8 @@ def root():
             "Financial Fraud Risk "
             "and Investigation Agent"
         ),
+
         "version": "1.0.0",
-        "status": "running"
+
+        "status": "running",
     }
