@@ -60,10 +60,10 @@ async def lifespan(app: FastAPI):
     # -----------------------------------------
 
     tools = FraudInvestigationTools(
-        transactions=investigation_history,
-        risk_assessments=risk_assessments
-    )
-
+    transactions=investigation_history,
+    risk_assessments=risk_assessments,
+    model=container.model
+)
     print(
         "Investigation tools initialized."
     )
