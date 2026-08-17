@@ -8,6 +8,10 @@ import pandas as pd
 
 class TransactionFeatureBuilder:
 
+    # =========================================================
+    # EXACT 21 FEATURES USED BY XGBOOST
+    # =========================================================
+
     FEATURE_COLUMNS = [
         "TransactionAmt",
         "TransactionAmt_log",
@@ -46,18 +50,28 @@ class TransactionFeatureBuilder:
         "addr2",
     ]
 
+    # =========================================================
+    # INITIALIZATION
+    # =========================================================
+
     def __init__(
         self,
         historical_df: pd.DataFrame,
+        identity: pd.DataFrame | None = None,
+        raw_columns: list[str] | None = None,
     ):
         """
         historical_df:
-            Historical transactions used to calculate
-            card/device behavioral features.
+            Historical transaction dataframe used for
+            behavioral feature generation.
 
-        IMPORTANT:
-            Only transactions before the new transaction
-            should be used for behavioral features.
+        identity:
+            Identity dataframe used to calculate
+            has_identity.
+
+        raw_columns:
+            Original transaction columns used for
+            missing_value_count.
         """
 
         if not isinstance(
@@ -83,26 +97,64 @@ class TransactionFeatureBuilder:
 
         if missing:
             raise ValueError(
-                f"Historical dataframe is missing columns: "
+                "historical_df is missing columns: "
                 f"{missing}"
             )
 
-        self.historical_df = historical_df.copy()
+        self.historical_df = (
+            historical_df.copy()
+        )
 
-    # =====================================================
+        # -----------------------------------------------------
+        # Identity transaction IDs
+        # -----------------------------------------------------
+
+        if identity is not None:
+
+            if (
+                "TransactionID"
+                not in identity.columns
+            ):
+                raise ValueError(
+                    "identity must contain "
+                    "'TransactionID'"
+                )
+
+            self.identity_ids = set(
+                identity["TransactionID"]
+                .dropna()
+                .astype("int64")
+                .tolist()
+            )
+
+        else:
+
+            self.identity_ids = set()
+
+        # -----------------------------------------------------
+        # Original raw schema
+        # -----------------------------------------------------
+
+        if raw_columns is not None:
+            self.raw_columns = list(
+                raw_columns
+            )
+        else:
+            self.raw_columns = list(
+                historical_df.columns
+            )
+
+    # =========================================================
     # BASIC FEATURES
-    # =====================================================
+    # =========================================================
 
     def _basic_features(
         self,
         transaction: dict[str, Any],
     ) -> dict[str, float]:
 
-        amount = float(
-            transaction.get(
-                "TransactionAmt",
-                0.0
-            )
+        transaction_id = transaction.get(
+            "TransactionID"
         )
 
         transaction_dt = float(
@@ -112,40 +164,64 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # TransactionDT in IEEE-CIS is measured
-        # in seconds from the reference start.
-        transaction_hour = (
-            int(transaction_dt // 3600)
-            % 24
+        amount = float(
+            transaction.get(
+                "TransactionAmt",
+                0.0
+            )
         )
+
+        # -----------------------------------------------------
+        # Transaction amount log
+        # -----------------------------------------------------
+
+        transaction_amt_log = float(
+            np.log1p(amount)
+        )
+
+        # -----------------------------------------------------
+        # Hour
+        # -----------------------------------------------------
+
+        transaction_hour = int(
+            (transaction_dt // 3600) % 24
+        )
+
+        # -----------------------------------------------------
+        # Day
+        # -----------------------------------------------------
 
         transaction_day = int(
             transaction_dt // 86400
         )
 
-        # -----------------------------------------
+        # -----------------------------------------------------
         # Identity
-        # -----------------------------------------
+        # -----------------------------------------------------
 
-        identity_columns = [
-            column
-            for column in transaction.keys()
-            if column.startswith("id_")
-        ]
-
-        has_identity = int(
-            any(
-                transaction.get(column) is not None
-                and not pd.isna(
-                    transaction.get(column)
-                )
-                for column in identity_columns
-            )
+        raw_transaction_id = transaction.get(
+            "TransactionID"
         )
 
-        # -----------------------------------------
+        try:
+            transaction_id = int(
+                raw_transaction_id
+            ) if raw_transaction_id is not None else None
+        except (
+            TypeError,
+            ValueError
+        ):
+            transaction_id = None
+
+        has_identity = int(
+            transaction_id is not None
+            and transaction_id
+            in self.identity_ids
+        )
+
+        # -----------------------------------------------------
         # Missing card information
-        # -----------------------------------------
+        # -----------------------------------------------------
 
         card_values = [
             transaction.get(column)
@@ -160,9 +236,9 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # -----------------------------------------
+        # -----------------------------------------------------
         # Missing address
-        # -----------------------------------------
+        # -----------------------------------------------------
 
         address_values = [
             transaction.get(column)
@@ -177,58 +253,58 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # -----------------------------------------
+        # -----------------------------------------------------
         # Missing value count
-        # -----------------------------------------
-
-        # For a complete raw transaction this counts
-        # missing values in the supplied transaction.
         #
-        # If the transaction contains only the minimum
-        # real-time fields, pass the complete expected
-        # transaction schema to build().
+        # IMPORTANT:
+        # raw_columns must be transactions.columns
+        # when creating the builder.
+        # -----------------------------------------------------
 
-        missing_value_count = sum(
-            value is None
-            or pd.isna(value)
-            for value in transaction.values()
-        )
+        missing_value_count = 0
+
+        for column in self.raw_columns:
+
+            value = transaction.get(
+                column
+            )
+
+            if (
+                value is None
+                or pd.isna(value)
+            ):
+                missing_value_count += 1
 
         return {
-            "TransactionAmt": amount,
 
-            "TransactionAmt_log": float(
-                np.log1p(amount)
-            ),
+            "TransactionAmt":
+                amount,
 
-            "transaction_hour": float(
-                transaction_hour
-            ),
+            "TransactionAmt_log":
+                transaction_amt_log,
 
-            "transaction_day": float(
-                transaction_day
-            ),
+            "transaction_hour":
+                float(transaction_hour),
 
-            "has_identity": float(
-                has_identity
-            ),
+            "transaction_day":
+                float(transaction_day),
 
-            "missing_card_info": float(
-                missing_card_info
-            ),
+            "has_identity":
+                float(has_identity),
 
-            "missing_address": float(
-                missing_address
-            ),
+            "missing_card_info":
+                float(missing_card_info),
 
-            "missing_value_count": float(
-                missing_value_count
-            ),
+            "missing_address":
+                float(missing_address),
+
+            "missing_value_count":
+                float(missing_value_count),
         }
 
-    # =====================================================
+    # =========================================================
     # CARD HISTORY
-    # =====================================================
+    # =========================================================
 
     def _card_history(
         self,
@@ -240,8 +316,13 @@ class TransactionFeatureBuilder:
             "card1"
         )
 
-        if card1 is None:
-            return self.historical_df.iloc[0:0]
+        if (
+            card1 is None
+            or pd.isna(card1)
+        ):
+            return self.historical_df.iloc[
+                0:0
+            ]
 
         history = self.historical_df[
             (
@@ -257,9 +338,9 @@ class TransactionFeatureBuilder:
 
         return history
 
-    # =====================================================
-    # CARD FEATURES
-    # =====================================================
+    # =========================================================
+    # CARD BEHAVIOR
+    # =========================================================
 
     def _card_features(
         self,
@@ -279,71 +360,84 @@ class TransactionFeatureBuilder:
             transaction_dt
         )
 
-        transaction_count = len(
+        card_transaction_count = len(
             history
         )
 
-        if transaction_count > 0:
+        # -----------------------------------------------------
+        # Historical average amount
+        # -----------------------------------------------------
+
+        if card_transaction_count > 0:
 
             amounts = pd.to_numeric(
                 history["TransactionAmt"],
                 errors="coerce"
             ).dropna()
 
-            if not amounts.empty:
-                average_amount = float(
+            if len(amounts) > 0:
+
+                card_avg_amount = float(
                     amounts.mean()
                 )
+
             else:
-                average_amount = 0.0
+
+                card_avg_amount = 0.0
 
         else:
 
-            average_amount = 0.0
+            card_avg_amount = 0.0
 
-        # -----------------------------------------
-        # Amount relative to historical average
-        # -----------------------------------------
+        # -----------------------------------------------------
+        # Amount vs average
+        # -----------------------------------------------------
 
-        if average_amount > 0:
+        if card_avg_amount > 0:
 
             amount_vs_card_avg = (
-                amount / average_amount
+                amount /
+                card_avg_amount
             )
 
         else:
 
             amount_vs_card_avg = 0.0
 
-        # -----------------------------------------
+        # -----------------------------------------------------
         # New card
-        # -----------------------------------------
+        # -----------------------------------------------------
 
         new_card = int(
-            transaction_count == 0
+            card_transaction_count == 0
         )
 
         return {
-            "card_transaction_count": float(
-                transaction_count
-            ),
 
-            "card_avg_amount": float(
-                average_amount
-            ),
+            "card_transaction_count":
+                float(
+                    card_transaction_count
+                ),
 
-            "amount_vs_card_avg": float(
-                amount_vs_card_avg
-            ),
+            "card_avg_amount":
+                float(
+                    card_avg_amount
+                ),
 
-            "new_card": float(
-                new_card
-            ),
+            "amount_vs_card_avg":
+                float(
+                    amount_vs_card_avg
+                ),
+
+            "new_card":
+                float(
+                    new_card
+                ),
         }
 
-    # =====================================================
+    # =========================================================
     # CARD VELOCITY
-    # =====================================================
+    # =========================================================
 
     def _card_velocity_features(
         self,
@@ -356,37 +450,40 @@ class TransactionFeatureBuilder:
             transaction_dt
         )
 
-        one_hour_start = (
-            transaction_dt - 3600
-        )
-
-        twenty_four_hour_start = (
-            transaction_dt - 86400
-        )
+        # -----------------------------------------------------
+        # Previous 1 hour
+        # -----------------------------------------------------
 
         history_1h = history[
             history["TransactionDT"]
-            >= one_hour_start
+            >= transaction_dt - 3600
         ]
+
+        # -----------------------------------------------------
+        # Previous 24 hours
+        # -----------------------------------------------------
 
         history_24h = history[
             history["TransactionDT"]
-            >= twenty_four_hour_start
+            >= transaction_dt - 86400
         ]
 
         return {
-            "card_txn_count_1h": float(
-                len(history_1h)
-            ),
 
-            "card_txn_count_24h": float(
-                len(history_24h)
-            ),
+            "card_txn_count_1h":
+                float(
+                    len(history_1h)
+                ),
+
+            "card_txn_count_24h":
+                float(
+                    len(history_24h)
+                ),
         }
 
-    # =====================================================
+    # =========================================================
     # DEVICE HISTORY
-    # =====================================================
+    # =========================================================
 
     def _device_history(
         self,
@@ -401,13 +498,19 @@ class TransactionFeatureBuilder:
         if (
             device_info is None
             or pd.isna(device_info)
+            or str(device_info).strip() == ""
         ):
+            return self.historical_df.iloc[
+                0:0
+            ]
 
-            return self.historical_df.iloc[0:0]
-
-        if "DeviceInfo" not in self.historical_df.columns:
-
-            return self.historical_df.iloc[0:0]
+        if (
+            "DeviceInfo"
+            not in self.historical_df.columns
+        ):
+            return self.historical_df.iloc[
+                0:0
+            ]
 
         history = self.historical_df[
             (
@@ -423,9 +526,9 @@ class TransactionFeatureBuilder:
 
         return history
 
-    # =====================================================
-    # DEVICE FEATURES
-    # =====================================================
+    # =========================================================
+    # DEVICE PROFILE FEATURES
+    # =========================================================
 
     def _device_features(
         self,
@@ -446,11 +549,18 @@ class TransactionFeatureBuilder:
         if not has_device_info:
 
             return {
-                "has_device_info": 0.0,
-                "device_profile_count": 0.0,
-                "device_profile_unique_cards": 0.0,
-                "new_device_profile": 1.0,
-                "device_unique_cards_historical": 0.0,
+
+                "has_device_info":
+                    0.0,
+
+                "device_profile_count":
+                    0.0,
+
+                "device_profile_unique_cards":
+                    0.0,
+
+                "new_device_profile":
+                    1.0,
             }
 
         history = self._device_history(
@@ -458,13 +568,13 @@ class TransactionFeatureBuilder:
             transaction_dt
         )
 
-        profile_count = len(
+        device_profile_count = len(
             history
         )
 
         if "card1" in history.columns:
 
-            unique_cards = int(
+            device_profile_unique_cards = int(
                 history["card1"]
                 .dropna()
                 .nunique()
@@ -472,35 +582,36 @@ class TransactionFeatureBuilder:
 
         else:
 
-            unique_cards = 0
+            device_profile_unique_cards = 0
 
         new_device_profile = int(
-            profile_count == 0
+            device_profile_count == 0
         )
 
         return {
-            "has_device_info": 1.0,
 
-            "device_profile_count": float(
-                profile_count
-            ),
+            "has_device_info":
+                1.0,
 
-            "device_profile_unique_cards": float(
-                unique_cards
-            ),
+            "device_profile_count":
+                float(
+                    device_profile_count
+                ),
 
-            "new_device_profile": float(
-                new_device_profile
-            ),
+            "device_profile_unique_cards":
+                float(
+                    device_profile_unique_cards
+                ),
 
-            "device_unique_cards_historical": float(
-                unique_cards
-            ),
+            "new_device_profile":
+                float(
+                    new_device_profile
+                ),
         }
 
-    # =====================================================
+    # =========================================================
     # CARD + DEVICE FEATURES
-    # =====================================================
+    # =========================================================
 
     def _card_device_features(
         self,
@@ -516,33 +627,60 @@ class TransactionFeatureBuilder:
             "DeviceInfo"
         )
 
+        # -----------------------------------------------------
+        # Missing card/device
+        # -----------------------------------------------------
+
         if (
             card1 is None
+            or pd.isna(card1)
             or device_info is None
             or pd.isna(device_info)
+            or str(device_info).strip() == ""
         ):
 
             return {
-                "card_device_transaction_count": 0.0,
-                "card_device_seen_before": 0.0,
+
+                "card_device_transaction_count":
+                    0.0,
+
+                "card_device_seen_before":
+                    0.0,
+
+                "device_unique_cards_historical":
+                    0.0,
             }
 
-        if "DeviceInfo" not in self.historical_df.columns:
+        if (
+            "DeviceInfo"
+            not in self.historical_df.columns
+        ):
 
             return {
-                "card_device_transaction_count": 0.0,
-                "card_device_seen_before": 0.0,
+
+                "card_device_transaction_count":
+                    0.0,
+
+                "card_device_seen_before":
+                    0.0,
+
+                "device_unique_cards_historical":
+                    0.0,
             }
 
-        history = self.historical_df[
-            (
-                self.historical_df["card1"]
-                == card1
-            )
-            &
+        # -----------------------------------------------------
+        # Exact card + device historical records
+        # -----------------------------------------------------
+
+        card_device_history = self.historical_df[
             (
                 self.historical_df["DeviceInfo"]
                 == device_info
+            )
+            &
+            (
+                self.historical_df["card1"]
+                == card1
             )
             &
             (
@@ -551,36 +689,149 @@ class TransactionFeatureBuilder:
             )
         ]
 
-        transaction_count = len(
-            history
+        card_device_transaction_count = len(
+            card_device_history
+        )
+
+        card_device_seen_before = int(
+            card_device_transaction_count > 0
+        )
+
+        # -----------------------------------------------------
+        # REPRODUCE ORIGINAL TRAINING LOGIC
+        #
+        # Original:
+        #
+        # df.sort_values(
+        #     [
+        #         "DeviceInfo",
+        #         "card1",
+        #         "TransactionDT"
+        #     ]
+        # )
+        #
+        # Then:
+        #
+        # for _, group in df[valid].groupby(
+        #     "DeviceInfo",
+        #     sort=False
+        # ):
+        #
+        #     cards_seen = set()
+        #
+        #     positions = group.index.to_numpy()
+        #     cards = group["card1"].to_numpy()
+        #
+        #     for card in cards:
+        #
+        #         counts.append(
+        #             len(cards_seen)
+        #         )
+        #
+        #         cards_seen.add(card)
+        #
+        # Therefore the feature for the current card
+        # depends on cards with LOWER card1 values
+        # in the sorted device group.
+        # -----------------------------------------------------
+
+        device_history = self.historical_df[
+            (
+                self.historical_df["DeviceInfo"]
+                == device_info
+            )
+            
+            &
+            (
+                self.historical_df["card1"]
+                .notna()
+            )
+        ].copy()
+
+        # -----------------------------------------------------
+        # Sort exactly as original training function
+        # -----------------------------------------------------
+
+        device_history = (
+            device_history
+            .sort_values(
+                [
+                    "DeviceInfo",
+                    "card1",
+                    "TransactionDT",
+                ]
+            )
+            .reset_index(drop=True)
+        )
+
+        # -----------------------------------------------------
+        # Reproduce cards_seen logic.
+        #
+        # We need the count immediately before
+        # the current card1 group.
+        # -----------------------------------------------------
+
+        cards_seen = set()
+
+        device_unique_cards_historical = 0
+
+        for historical_card in (
+            device_history["card1"]
+        ):
+
+            # If we've reached the current
+            # card's position in sorted card order,
+            # stop BEFORE adding the current card.
+            if historical_card >= card1:
+
+                break
+
+            if pd.notna(historical_card):
+
+                cards_seen.add(
+                    historical_card
+                )
+
+        device_unique_cards_historical = len(
+            cards_seen
         )
 
         return {
-            "card_device_transaction_count": float(
-                transaction_count
-            ),
 
-            "card_device_seen_before": float(
-                int(transaction_count > 0)
-            ),
+            "card_device_transaction_count":
+                float(
+                    card_device_transaction_count
+                ),
+
+            "card_device_seen_before":
+                float(
+                    card_device_seen_before
+                ),
+
+            "device_unique_cards_historical":
+                float(
+                    device_unique_cards_historical
+                ),
         }
 
-    # =====================================================
-    # MAIN BUILD FUNCTION
-    # =====================================================
+    # =========================================================
+    # MAIN BUILD
+    # =========================================================
 
     def build(
         self,
         transaction: dict[str, Any],
     ) -> dict[str, float]:
         """
-        Generate the 21 model features for a transaction.
+        Generate the exact 21 model features
+        for one transaction.
 
-        The transaction itself does NOT need to exist in
-        historical_df.
+        The transaction itself does not need to
+        already exist in the historical dataframe.
 
-        Historical card/device information is calculated
-        only from transactions occurring before it.
+        All behavioral features use transactions
+        that occurred before the current
+        TransactionDT.
         """
 
         if not isinstance(
@@ -591,19 +842,24 @@ class TransactionFeatureBuilder:
                 "transaction must be a dictionary"
             )
 
-        if "TransactionDT" not in transaction:
-            raise ValueError(
-                "TransactionDT is required"
-            )
+        required_fields = [
+            "TransactionID",
+            "TransactionDT",
+            "TransactionAmt",
+            "card1",
+        ]
 
-        if "TransactionAmt" not in transaction:
-            raise ValueError(
-                "TransactionAmt is required"
-            )
+        missing_fields = [
+            field
+            for field in required_fields
+            if field not in transaction
+        ]
 
-        if "card1" not in transaction:
+        if missing_fields:
+
             raise ValueError(
-                "card1 is required"
+                "Transaction is missing required "
+                f"fields: {missing_fields}"
             )
 
         transaction_dt = float(
@@ -612,9 +868,9 @@ class TransactionFeatureBuilder:
 
         features = {}
 
-        # -----------------------------------------
+        # -----------------------------------------------------
         # Basic
-        # -----------------------------------------
+        # -----------------------------------------------------
 
         features.update(
             self._basic_features(
@@ -622,9 +878,9 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # -----------------------------------------
-        # Card
-        # -----------------------------------------
+        # -----------------------------------------------------
+        # Card behavior
+        # -----------------------------------------------------
 
         features.update(
             self._card_features(
@@ -633,9 +889,9 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # -----------------------------------------
+        # -----------------------------------------------------
         # Card velocity
-        # -----------------------------------------
+        # -----------------------------------------------------
 
         features.update(
             self._card_velocity_features(
@@ -644,9 +900,9 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # -----------------------------------------
-        # Device
-        # -----------------------------------------
+        # -----------------------------------------------------
+        # Device profile
+        # -----------------------------------------------------
 
         features.update(
             self._device_features(
@@ -655,9 +911,9 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # -----------------------------------------
+        # -----------------------------------------------------
         # Card + device
-        # -----------------------------------------
+        # -----------------------------------------------------
 
         features.update(
             self._card_device_features(
@@ -666,14 +922,14 @@ class TransactionFeatureBuilder:
             )
         )
 
-        # -----------------------------------------
-        # Ensure exact model columns
-        # -----------------------------------------
+        # -----------------------------------------------------
+        # Validate feature completeness
+        # -----------------------------------------------------
 
         missing_features = [
-            column
-            for column in self.FEATURE_COLUMNS
-            if column not in features
+            feature
+            for feature in self.FEATURE_COLUMNS
+            if feature not in features
         ]
 
         if missing_features:
@@ -683,31 +939,28 @@ class TransactionFeatureBuilder:
                 f"{missing_features}"
             )
 
-        # -----------------------------------------
-        # Return ONLY the 21 model features
-        # in the correct order
-        # -----------------------------------------
+        # -----------------------------------------------------
+        # Return in exact model order
+        # -----------------------------------------------------
 
-        ordered_features = {
-            column: float(
-                features[column]
+        return {
+            feature: float(
+                features[feature]
             )
-            for column in self.FEATURE_COLUMNS
+            for feature in self.FEATURE_COLUMNS
         }
 
-        return ordered_features
-
-    # =====================================================
+    # =========================================================
     # DATAFRAME OUTPUT
-    # =====================================================
+    # =========================================================
 
     def build_dataframe(
         self,
         transaction: dict[str, Any],
     ) -> pd.DataFrame:
         """
-        Return the generated features as a
-        one-row DataFrame.
+        Build one-row DataFrame in the exact
+        XGBoost feature order.
         """
 
         features = self.build(

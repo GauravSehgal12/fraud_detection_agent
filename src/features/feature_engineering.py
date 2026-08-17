@@ -3,12 +3,13 @@ import numpy as np
 
 
 def add_basic_features(
-    transactions: pd.DataFrame,
-    identity: pd.DataFrame
+    self,
+    historical_df: pd.DataFrame,
+    identity: pd.DataFrame,
+    raw_columns: list[str] | None = None,
 ) -> pd.DataFrame:
 
-    df = transactions.copy()
-
+    df = historical_df.copy()
     
     identity_ids = set(identity["TransactionID"])
 
@@ -51,8 +52,9 @@ def add_basic_features(
 
  
 
+    raw_cols = raw_columns if raw_columns is not None else df.columns.tolist()
     df["missing_value_count"] = (
-        df.isna().sum(axis=1)
-    ).astype("int16")
+        df[raw_cols].isna().sum(axis=1).astype("int16")
+    )
 
     return df

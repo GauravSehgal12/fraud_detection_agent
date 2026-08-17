@@ -24,9 +24,16 @@ def build_historical_features(
     # 1. Basic transaction features
     # --------------------------------------------------
 
+    merged_df = transactions.merge(
+        identity,
+        on="TransactionID",
+        how="left"
+    )
+    
     df = add_basic_features(
-        transactions,
-        identity
+        merged_df,
+        historical_df=merged_df,
+        identity=identity,
     )
 
     # --------------------------------------------------
