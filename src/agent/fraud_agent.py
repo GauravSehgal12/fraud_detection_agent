@@ -32,7 +32,7 @@ class FraudInvestigationAgent:
         self,
         tools: FraudInvestigationTools,
         llm: FraudLLM,
-        input_guardrail: InputGuardrail
+        
     ):
         """
         Initialize the fraud investigation agent.
@@ -40,7 +40,7 @@ class FraudInvestigationAgent:
 
         self.tools = tools
         self.llm = llm
-        self.input_guardrail = input_guardrail
+        self.input_guardrail = InputGuardrail()
         self.guardrail = OutputGuardrail()
 
     def investigate(
