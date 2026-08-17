@@ -1,0 +1,8 @@
+[
+  {
+    "transaction_id": 3409570,
+    "analyst_label": "CONFIRMED_FRAUD",
+    "analyst_comment": "Unauthorized card usage confirmed",
+    "timestamp": "2026-08-17T16:16:09.268616+00:00"
+  }
+]

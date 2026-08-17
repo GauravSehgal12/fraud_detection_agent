@@ -5,9 +5,7 @@ from fastapi import FastAPI
 from src.agent.tools import FraudInvestigationTools
 from src.agent.llm import FraudLLM
 from src.agent.fraud_agent import FraudInvestigationAgent
-
 from src.api.route import router, set_agent
-
 from src.services.app_container import AppContainer
 
 
@@ -16,162 +14,83 @@ container = AppContainer()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-
-    print(
-        "Starting Financial Fraud Risk API..."
-    )
+    print("Starting Financial Fraud Risk API...")
 
     # =====================================================
-    # 1. LOAD MODEL AND DATA
+    # 1. LOAD MODEL AND DATA & INITIALIZE SERVICES
     # =====================================================
-
     container.load_all()
 
-    # -----------------------------------------------------
-    # Get data from container
-    # -----------------------------------------------------
-
     features = container.features
-
-    transactions = (
-        container.transactions
-    )
-
-    identity = (
-        container.identity
-    )
-
-    investigation_history = (
-        container.investigation_history
-    )
-
-    risk_assessments = (
-        container.risk_assessments
-    )
+    transactions = container.transactions
+    raw_transactions = container.raw_transactions
+    identity = container.identity
+    investigation_history = container.investigation_history
+    risk_assessments = container.risk_assessments
 
     # =====================================================
     # 2. STARTUP INFORMATION
     # =====================================================
-
-    print(
-        "\n========== APPLICATION DATA =========="
-    )
-
-    print(
-        f"Features loaded: "
-        f"{len(features)}"
-    )
-
-    print(
-        "Raw transactions + identity loaded: "
-        f"{transactions.shape}"
-    )
-
-    print(
-        "Identity loaded: "
-        f"{identity.shape}"
-    )
-
-    print(
-        "Investigation history loaded: "
-        f"{len(investigation_history)} rows"
-    )
-
-    print(
-        "Risk assessments loaded: "
-        f"{len(risk_assessments)}"
-    )
-
-    print(
-        "======================================\n"
-    )
+    print("\n========== APPLICATION DATA ==========")
+    print(f"Model features: {len(features)}")
+    print(f"Raw transactions: {raw_transactions.shape[0]} x {raw_transactions.shape[1]}")
+    print(f"Identity: {identity.shape[0]} x {identity.shape[1]}")
+    print(f"Merged: {transactions.shape[0]} x {transactions.shape[1]}")
+    print(f"Investigation history loaded: {len(investigation_history)} rows")
+    print(f"Risk assessments loaded: {len(risk_assessments)}")
+    print("Cold-start detector initialized")
+    print("Rule engine initialized")
+    print("Decision engine initialized")
+    print("======================================\n")
 
     # =====================================================
     # 3. CREATE INVESTIGATION TOOLS
     # =====================================================
-
     tools = FraudInvestigationTools(
-        transactions=transactions,
+        transactions=raw_transactions,
         identity=identity,
         risk_assessments=risk_assessments,
         model=container.model,
+        cold_start_detector=container.cold_start_detector,
+        rule_engine=container.rule_engine,
+        decision_engine=container.decision_engine,
     )
-
-    print(
-        "Investigation tools initialized."
-    )
+    print("Investigation tools initialized.")
 
     # =====================================================
-    # 4. CREATE LLM
+    # 4. CREATE LLM & AGENT
     # =====================================================
-
     llm = FraudLLM()
-
-    print(
-        f"LLM initialized: "
-        f"{llm.model}"
-    )
-
-    # =====================================================
-    # 5. CREATE FRAUD AGENT
-    # =====================================================
+    print(f"LLM initialized: {llm.model}")
 
     agent = FraudInvestigationAgent(
         tools=tools,
         llm=llm,
     )
-
-    print(
-        "Fraud Investigation Agent initialized."
-    )
+    print("Fraud Investigation Agent initialized")
 
     # =====================================================
-    # 6. REGISTER AGENT
+    # 5. REGISTER AGENT
     # =====================================================
-
     set_agent(agent)
-
     container.agent = agent
 
-    print(
-        "\nFinancial Fraud Risk API is ready."
-    )
+    print("\nFinancial Fraud Risk API is ready.")
 
     yield
 
     # =====================================================
     # SHUTDOWN
     # =====================================================
+    print("Shutting down Financial Fraud Risk API...")
 
-    print(
-        "Shutting down Financial Fraud Risk API..."
-    )
-
-
-# =========================================================
-# FASTAPI APPLICATION
-# =========================================================
 
 app = FastAPI(
-    title=(
-        "Financial Fraud Risk & "
-        "Investigation API"
-    ),
-
+    title="Financial Fraud Risk & Investigation API",
     version="1.0.0",
-
-    description=(
-        "Production-oriented financial fraud "
-        "risk detection and investigation service."
-    ),
-
+    description="Production-oriented financial fraud risk detection and investigation service.",
     lifespan=lifespan,
 )
-
-
-# =========================================================
-# ROUTES
-# =========================================================
 
 app.include_router(
     router,
@@ -179,20 +98,10 @@ app.include_router(
 )
 
 
-# =========================================================
-# ROOT
-# =========================================================
-
 @app.get("/")
 def root():
-
     return {
-        "service": (
-            "Financial Fraud Risk "
-            "and Investigation Agent"
-        ),
-
+        "service": "Financial Fraud Risk and Investigation Agent",
         "version": "1.0.0",
-
         "status": "running",
     }

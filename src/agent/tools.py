@@ -1,11 +1,11 @@
 from typing import Any
-
 import pandas as pd
 
 from src.services.risk_engine import RiskEngine
-from src.services.transaction_feature_builder import (
-    TransactionFeatureBuilder,
-)
+from src.services.transaction_feature_builder import TransactionFeatureBuilder
+from src.services.cold_start_detector import ColdStartDetector
+from src.services.rule_engine import RuleEngine
+from src.services.decision_engine import DecisionEngine
 
 
 class FraudInvestigationTools:
@@ -16,806 +16,180 @@ class FraudInvestigationTools:
         identity: pd.DataFrame | None = None,
         risk_assessments: dict | None = None,
         model=None,
+        cold_start_detector: ColdStartDetector | None = None,
+        rule_engine: RuleEngine | None = None,
+        decision_engine: DecisionEngine | None = None,
     ):
         """
-        Fraud investigation tools.
-
-        transactions:
-            ORIGINAL transaction dataframe.
-            Must contain the complete raw transaction schema.
-
-        identity:
-            IEEE-CIS identity dataframe.
-
-        model:
-            Loaded XGBoost model.
+        Fraud investigation tools with deterministic rules and decision engines.
         """
-
-        # =====================================================
-        # DATA
-        # =====================================================
-
         self.transactions = transactions
         self.identity = identity
+        self.risk_assessments = risk_assessments if risk_assessments is not None else {}
 
-        self.risk_assessments = (
-            risk_assessments
-            if risk_assessments is not None
-            else {}
-        )
+        if not isinstance(self.transactions, pd.DataFrame):
+            raise TypeError("transactions must be a pandas DataFrame.")
 
-        # =====================================================
-        # VALIDATION
-        # =====================================================
-
-        if not isinstance(
-            self.transactions,
-            pd.DataFrame,
-        ):
-            raise TypeError(
-                "transactions must be a pandas DataFrame."
-            )
-
-        required_columns = [
-            "TransactionID",
-            "TransactionDT",
-            "TransactionAmt",
-            "card1",
-        ]
-
-        missing_columns = [
-            column
-            for column in required_columns
-            if column not in self.transactions.columns
-        ]
-
+        required_columns = ["TransactionID", "TransactionDT", "TransactionAmt", "card1"]
+        missing_columns = [col for col in required_columns if col not in self.transactions.columns]
         if missing_columns:
+            raise ValueError(f"Transactions dataframe is missing required columns: {missing_columns}")
 
-            raise ValueError(
-                "Transactions dataframe is missing "
-                f"required columns: {missing_columns}"
-            )
-
-        if self.identity is not None:
-
-            if not isinstance(
-                self.identity,
-                pd.DataFrame,
-            ):
-                raise TypeError(
-                    "identity must be a pandas DataFrame."
-                )
-
-            if (
-                "TransactionID"
-                not in self.identity.columns
-            ):
-
-                raise ValueError(
-                    "identity dataframe must contain "
-                    "'TransactionID'."
-                )
-
-        # =====================================================
-        # CREATE FEATURE-BUILDER HISTORY
-        # =====================================================
-
-        # IMPORTANT:
-        #
-        # Keep ALL original transaction columns.
-        #
-        # Do NOT reduce this dataframe to only:
-        #
-        # TransactionID
-        # TransactionDT
-        # TransactionAmt
-        # card1
-        #
-        # The feature builder needs the original schema.
-        # =====================================================
-
+        # Feature Builder history setup
         history = self.transactions.copy()
-
-        # =====================================================
-        # ADD DEVICE INFO FROM IDENTITY
-        # =====================================================
 
         if (
             self.identity is not None
-            and "TransactionID"
-            in self.identity.columns
-            and "DeviceInfo"
-            in self.identity.columns
+            and "TransactionID" in self.identity.columns
+            and "DeviceInfo" in self.identity.columns
         ):
-
-            device_data = self.identity[
-                [
-                    "TransactionID",
-                    "DeviceInfo",
-                ]
-            ].copy()
-
-            device_data = (
-                device_data
-                .drop_duplicates(
-                    subset=[
-                        "TransactionID"
-                    ],
-                    keep="first",
-                )
-            )
-
-            # If DeviceInfo already exists in the
-            # transaction dataframe, keep the existing
-            # column and fill only missing values from
-            # identity.
+            device_data = self.identity[["TransactionID", "DeviceInfo"]].copy()
+            device_data = device_data.drop_duplicates(subset=["TransactionID"], keep="first")
 
             if "DeviceInfo" in history.columns:
-
-                identity_device_map = (
-                    device_data.set_index(
-                        "TransactionID"
-                    )["DeviceInfo"]
+                identity_device_map = device_data.set_index("TransactionID")["DeviceInfo"]
+                history["DeviceInfo"] = history["DeviceInfo"].fillna(
+                    history["TransactionID"].map(identity_device_map)
                 )
-
-                history["DeviceInfo"] = (
-                    history["DeviceInfo"]
-                    .fillna(
-                        history[
-                            "TransactionID"
-                        ].map(
-                            identity_device_map
-                        )
-                    )
-                )
-
             else:
-
-                history = history.merge(
-                    device_data,
-                    on="TransactionID",
-                    how="left",
-                    sort=False,
-                )
-
+                history = history.merge(device_data, on="TransactionID", how="left", sort=False)
         else:
-
             if "DeviceInfo" not in history.columns:
-
                 history["DeviceInfo"] = None
 
-        # =====================================================
-        # FEATURE BUILDER
-        # =====================================================
-
-        self.feature_builder = (
-            TransactionFeatureBuilder(
-                historical_df=history,
-                identity=self.identity,
-
-                # IMPORTANT:
-                # raw_columns must be the original
-                # transaction schema.
-                raw_columns=(
-                    self.transactions
-                    .columns
-                    .tolist()
-                ),
-            )
+        self.feature_builder = TransactionFeatureBuilder(
+            historical_df=history,
+            identity=self.identity,
+            raw_columns=self.transactions.columns.tolist(),
         )
 
-        # =====================================================
-        # DEBUG
-        # =====================================================
-
-        print(
-            "\n========== FEATURE BUILDER =========="
-        )
-
-        print(
-            "Transaction columns:",
-            len(
-                self.transactions.columns
-            ),
-        )
-
-        print(
-            "Feature builder raw columns:",
-            len(
-                self.feature_builder.raw_columns
-            ),
-        )
-
-        print(
-            "Identity rows:",
-            len(self.identity)
-            if self.identity is not None
-            else 0,
-        )
-
-        print(
-            "=====================================\n"
-        )
-
-        # =====================================================
-        # RISK ENGINE
-        # =====================================================
-
+        # Risk Engine
         self.risk_engine = None
-
         if model is not None:
-
             self.risk_engine = RiskEngine(
                 model=model,
-                feature_builder=(
-                    self.feature_builder
-                ),
+                feature_builder=self.feature_builder,
             )
 
-    # =========================================================
-    # FIND HISTORICAL BASE TRANSACTION
-    # =========================================================
-
-    def _find_base_transaction(
-        self,
-        transaction: dict[str, Any],
-    ) -> dict[str, Any] | None:
-        """
-        Find the historical transaction that corresponds
-        to a new/synthetic transaction.
-
-        Matching strategy:
-
-            card1
-              +
-            TransactionDT
-
-        This is useful for the synthetic transaction used
-        in the notebook:
-
-            original:
-                TransactionID = 3409570
-
-            new:
-                TransactionID = 999999999
-
-        where the transaction characteristics are retained
-        but selected fields are overridden.
-        """
-
-        card1 = transaction.get(
-            "card1"
+        # Architectural Engines
+        self.cold_start_detector = (
+            cold_start_detector
+            if cold_start_detector is not None
+            else ColdStartDetector(self.transactions, self.identity)
         )
+        self.rule_engine = rule_engine if rule_engine is not None else RuleEngine()
+        self.decision_engine = decision_engine if decision_engine is not None else DecisionEngine()
 
-        transaction_dt = transaction.get(
-            "TransactionDT"
-        )
-
-        if (
-            card1 is None
-            or transaction_dt is None
-        ):
+    def _find_base_transaction(self, transaction: dict[str, Any]) -> dict[str, Any] | None:
+        card1 = transaction.get("card1")
+        transaction_dt = transaction.get("TransactionDT")
+        if card1 is None or transaction_dt is None:
             return None
 
         try:
-
-            card1_numeric = float(
-                card1
-            )
-
-            transaction_dt_numeric = float(
-                transaction_dt
-            )
-
-        except (
-            TypeError,
-            ValueError,
-        ):
-
+            card1_numeric = float(card1)
+            transaction_dt_numeric = float(transaction_dt)
+        except (TypeError, ValueError):
             return None
 
-        # -----------------------------------------------------
-        # Match card1 + TransactionDT
-        # -----------------------------------------------------
-
         matches = self.transactions[
-            (
-                pd.to_numeric(
-                    self.transactions["card1"],
-                    errors="coerce",
-                )
-                == card1_numeric
-            )
-            &
-            (
-                pd.to_numeric(
-                    self.transactions[
-                        "TransactionDT"
-                    ],
-                    errors="coerce",
-                )
-                == transaction_dt_numeric
-            )
+            (pd.to_numeric(self.transactions["card1"], errors="coerce") == card1_numeric)
+            & (pd.to_numeric(self.transactions["TransactionDT"], errors="coerce") == transaction_dt_numeric)
         ]
 
         if matches.empty:
-
             return None
 
-        # -----------------------------------------------------
-        # Return complete original row
-        # -----------------------------------------------------
+        return matches.iloc[0].to_dict()
 
-        row = matches.iloc[0]
-
-        result = row.to_dict()
-
-        return result
-
-    # =========================================================
-    # ENRICH NEW TRANSACTION
-    # =========================================================
-
-    def _prepare_new_transaction(
-        self,
-        transaction: dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Prepare a new transaction for feature generation.
-
-        If a matching historical transaction exists using
-        card1 + TransactionDT, use that complete raw row as
-        the base and overwrite it with the values supplied
-        by the API.
-
-        This preserves the original 434-column structure.
-        """
-
-        # -----------------------------------------------------
-        # Try to find matching historical transaction
-        # -----------------------------------------------------
-
-        base_transaction = (
-            self._find_base_transaction(
-                transaction
-            )
-        )
+    def _prepare_new_transaction(self, transaction: dict[str, Any]) -> dict[str, Any]:
+        base_transaction = self._find_base_transaction(transaction)
 
         if base_transaction is not None:
-
-            # Start with complete 434-column row
             enriched = base_transaction.copy()
-
-            # -------------------------------------------------
-            # Override with API values
-            # -------------------------------------------------
-
-            enriched.update(
-                transaction
-            )
-
-            # -------------------------------------------------
-            # IMPORTANT:
-            #
-            # Keep the NEW TransactionID.
-            # -------------------------------------------------
-
-            if (
-                "TransactionID"
-                in transaction
-            ):
-
-                enriched[
-                    "TransactionID"
-                ] = transaction[
-                    "TransactionID"
-                ]
-
-            print(
-                "\n"
-                "========== NEW TRANSACTION =========="
-            )
-
-            print(
-                "Matched historical transaction:"
-            )
-
-            print(
-                base_transaction.get(
-                    "TransactionID"
-                )
-            )
-
-            print(
-                "New transaction ID:"
-            )
-
-            print(
-                transaction.get(
-                    "TransactionID"
-                )
-            )
-
-            print(
-                "Raw fields:",
-                len(enriched),
-            )
-
-            print(
-                "======================================\n"
-            )
-
+            enriched.update(transaction)
+            if "TransactionID" in transaction:
+                enriched["TransactionID"] = transaction["TransactionID"]
+            enriched["synthetic"] = True
             return enriched
 
-        # -----------------------------------------------------
-        # No historical match
-        # -----------------------------------------------------
-
         enriched = transaction.copy()
-
-        print(
-            "\n"
-            "========== NEW TRANSACTION =========="
-        )
-
-        print(
-            "No historical base transaction "
-            "found."
-        )
-
-        print(
-            "Using supplied transaction only."
-        )
-
-        print(
-            "Fields:",
-            len(enriched),
-        )
-
-        print(
-            "======================================\n"
-        )
-
+        enriched["synthetic"] = False
         return enriched
 
-    # =========================================================
-    # GET TRANSACTION
-    # =========================================================
-
-    def get_transaction(
-        self,
-        transaction: int | dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Get transaction information.
-
-        Existing transaction:
-
-            get_transaction(3409570)
-
-        New transaction:
-
-            get_transaction({
-                "TransactionID": 999999999,
-                "TransactionDT": 10699419,
-                "TransactionAmt": 87.302,
-                "card1": 12730,
-                "DeviceInfo":
-                    "LG-D320 Build/KOT49I.V10a"
-            })
-        """
-
-        # =====================================================
-        # EXISTING TRANSACTION
-        # =====================================================
-
-        if isinstance(
-            transaction,
-            int,
-        ):
-
-            matches = self.transactions[
-                self.transactions[
-                    "TransactionID"
-                ]
-                == transaction
-            ]
-
+    def get_transaction(self, transaction: int | dict[str, Any]) -> dict[str, Any]:
+        if isinstance(transaction, int):
+            matches = self.transactions[self.transactions["TransactionID"] == transaction]
             if matches.empty:
-
-                return {
-                    "error":
-                        "Transaction not found."
-                }
+                return {"error": "Transaction not found."}
 
             row = matches.iloc[0]
-
             result = {}
-
-            for column in [
-                "TransactionID",
-                "TransactionDT",
-                "TransactionAmt",
-                "card1",
-            ]:
-
-                if column in row.index:
-
-                    value = row[column]
-
-                    if pd.isna(value):
-
-                        value = None
-
-                    elif hasattr(
-                        value,
-                        "item",
-                    ):
-
-                        value = value.item()
-
-                    result[column] = value
-
-            # -------------------------------------------------
-            # DeviceInfo
-            # -------------------------------------------------
+            for col in ["TransactionID", "TransactionDT", "TransactionAmt", "card1"]:
+                if col in row.index:
+                    val = row[col]
+                    result[col] = None if pd.isna(val) else (val.item() if hasattr(val, "item") else val)
 
             result["DeviceInfo"] = None
-
             if (
                 self.identity is not None
-                and "TransactionID"
-                in self.identity.columns
-                and "DeviceInfo"
-                in self.identity.columns
+                and "TransactionID" in self.identity.columns
+                and "DeviceInfo" in self.identity.columns
             ):
-
-                identity_match = self.identity[
-                    self.identity[
-                        "TransactionID"
-                    ]
-                    == transaction
-                ]
-
-                if not identity_match.empty:
-
-                    value = (
-                        identity_match.iloc[0][
-                            "DeviceInfo"
-                        ]
-                    )
-
-                    if pd.isna(value):
-
-                        value = None
-
-                    result["DeviceInfo"] = value
-
+                id_match = self.identity[self.identity["TransactionID"] == transaction]
+                if not id_match.empty:
+                    val = id_match.iloc[0]["DeviceInfo"]
+                    result["DeviceInfo"] = None if pd.isna(val) else val
             elif "DeviceInfo" in row.index:
-
-                value = row[
-                    "DeviceInfo"
-                ]
-
-                if pd.isna(value):
-
-                    value = None
-
-                result["DeviceInfo"] = value
+                val = row["DeviceInfo"]
+                result["DeviceInfo"] = None if pd.isna(val) else val
 
             return result
 
-        # =====================================================
-        # NEW TRANSACTION
-        # =====================================================
-
-        if isinstance(
-            transaction,
-            dict,
-        ):
-
-            transaction_id = (
-                transaction.get(
-                    "TransactionID"
-                )
-            )
-
+        if isinstance(transaction, dict):
+            transaction_id = transaction.get("TransactionID")
             if transaction_id is None:
-
-                return {
-                    "error":
-                        "TransactionID is required."
-                }
-
-            # -------------------------------------------------
-            # Return the user-facing transaction.
-            #
-            # We do NOT return all 434 columns here.
-            # The enriched version is used only for risk
-            # feature generation.
-            # -------------------------------------------------
+                return {"error": "TransactionID is required."}
 
             result = {}
-
-            for column in [
-                "TransactionID",
-                "TransactionDT",
-                "TransactionAmt",
-                "card1",
-                "DeviceInfo",
-            ]:
-
-                if column in transaction:
-
-                    value = transaction[
-                        column
-                    ]
-
-                    if (
-                        value is None
-                        or pd.isna(value)
-                    ):
-
-                        value = None
-
-                    elif hasattr(
-                        value,
-                        "item",
-                    ):
-
-                        value = value.item()
-
-                    result[column] = value
-
+            for col in ["TransactionID", "TransactionDT", "TransactionAmt", "card1", "DeviceInfo"]:
+                if col in transaction:
+                    val = transaction[col]
+                    result[col] = None if (val is None or pd.isna(val)) else (val.item() if hasattr(val, "item") else val)
             return result
 
-        return {
-            "error": (
-                "Transaction must be either "
-                "an integer transaction ID or "
-                "a transaction dictionary."
-            )
-        }
+        return {"error": "Invalid transaction input."}
 
-    # =========================================================
-    # RISK ASSESSMENT
-    # =========================================================
-
-    def get_risk_assessment(
-        self,
-        transaction: int | dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Calculate dynamic fraud risk.
-        """
-
+    def get_risk_assessment(self, transaction: int | dict[str, Any]) -> dict[str, Any]:
         if self.risk_engine is None:
+            return {"error": "Risk engine not initialized."}
 
-            return {
-                "error":
-                    "Risk engine not initialized."
-            }
-
-        # =====================================================
-        # EXISTING TRANSACTION
-        # =====================================================
-
-        if isinstance(
-            transaction,
-            int,
-        ):
-
+        if isinstance(transaction, int):
             risk_input = transaction
-
-        # =====================================================
-        # NEW TRANSACTION
-        # =====================================================
-
-        elif isinstance(
-            transaction,
-            dict,
-        ):
-
-            risk_input = (
-                self._prepare_new_transaction(
-                    transaction
-                )
-            )
-
+        elif isinstance(transaction, dict):
+            risk_input = self._prepare_new_transaction(transaction)
         else:
+            return {"error": "Invalid transaction type."}
 
-            return {
-                "error": (
-                    "Invalid transaction type."
-                )
-            }
+        return self.risk_engine.calculate_risk(risk_input)
 
-        # =====================================================
-        # RISK ENGINE
-        # =====================================================
+    def get_card_history(self, transaction: int | dict[str, Any]) -> dict[str, Any]:
+        tx_data = self.get_transaction(transaction)
+        if "error" in tx_data:
+            return tx_data
 
-        try:
+        card1 = tx_data.get("card1")
+        transaction_dt = tx_data.get("TransactionDT")
 
-            result = (
-                self.risk_engine.calculate_risk(
-                    risk_input
-                )
-            )
-
-        except Exception as exc:
-
-            return {
-                "error":
-                    "Risk calculation failed.",
-                "details":
-                    str(exc),
-            }
-
-        return result
-
-    # =========================================================
-    # CARD HISTORY
-    # =========================================================
-
-    def get_card_history(
-        self,
-        transaction: int | dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Return historical card behavior.
-
-        Only transactions before the current
-        TransactionDT are included.
-        """
-
-        transaction_data = (
-            self.get_transaction(
-                transaction
-            )
-        )
-
-        if "error" in transaction_data:
-
-            return transaction_data
-
-        card1 = transaction_data.get(
-            "card1"
-        )
-
-        transaction_dt = (
-            transaction_data.get(
-                "TransactionDT"
-            )
-        )
-
-        if (
-            card1 is None
-            or transaction_dt is None
-        ):
-
-            return {
-                "error":
-                    "Card information unavailable."
-            }
+        if card1 is None or transaction_dt is None:
+            return {"error": "Card information unavailable."}
 
         history = self.transactions[
-            (
-                self.transactions[
-                    "card1"
-                ]
-                == card1
-            )
-            &
-            (
-                self.transactions[
-                    "TransactionDT"
-                ]
-                < transaction_dt
-            )
+            (self.transactions["card1"] == card1)
+            & (self.transactions["TransactionDT"] < transaction_dt)
         ].copy()
 
         if history.empty:
-
             return {
                 "card1": int(card1),
                 "transaction_count": 0,
@@ -824,265 +198,147 @@ class FraudInvestigationTools:
                 "min_amount": 0.0,
             }
 
-        amounts = pd.to_numeric(
-            history[
-                "TransactionAmt"
-            ],
-            errors="coerce",
-        ).dropna()
-
+        amounts = pd.to_numeric(history["TransactionAmt"], errors="coerce").dropna()
         return {
-            "card1":
-                int(card1),
-
-            "transaction_count":
-                int(len(history)),
-
-            "average_amount":
-                float(
-                    amounts.mean()
-                )
-                if not amounts.empty
-                else 0.0,
-
-            "max_amount":
-                float(
-                    amounts.max()
-                )
-                if not amounts.empty
-                else 0.0,
-
-            "min_amount":
-                float(
-                    amounts.min()
-                )
-                if not amounts.empty
-                else 0.0,
+            "card1": int(card1),
+            "transaction_count": int(len(history)),
+            "average_amount": float(amounts.mean()) if not amounts.empty else 0.0,
+            "max_amount": float(amounts.max()) if not amounts.empty else 0.0,
+            "min_amount": float(amounts.min()) if not amounts.empty else 0.0,
         }
 
-    # =========================================================
-    # DEVICE HISTORY
-    # =========================================================
+    def get_device_history(self, transaction: int | dict[str, Any]) -> dict[str, Any]:
+        tx_data = self.get_transaction(transaction)
+        if "error" in tx_data:
+            return tx_data
 
-    def get_device_history(
-        self,
-        transaction: int | dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Return historical device behavior.
-        """
+        device_info = tx_data.get("DeviceInfo")
+        transaction_dt = tx_data.get("TransactionDT")
 
-        transaction_data = (
-            self.get_transaction(
-                transaction
-            )
-        )
-
-        if "error" in transaction_data:
-
-            return transaction_data
-
-        device_info = (
-            transaction_data.get(
-                "DeviceInfo"
-            )
-        )
-
-        transaction_dt = (
-            transaction_data.get(
-                "TransactionDT"
-            )
-        )
-
-        if (
-            device_info is None
-            or transaction_dt is None
-        ):
-
-            return {
-                "device_info": None,
-                "transaction_count": 0,
-                "unique_cards": 0,
-            }
-
-        # =====================================================
-        # DEVICE HISTORY FROM IDENTITY
-        # =====================================================
+        if device_info is None or transaction_dt is None:
+            return {"device_info": None, "transaction_count": 0, "unique_cards": 0}
 
         if (
             self.identity is None
-            or "TransactionID"
-            not in self.identity.columns
-            or "DeviceInfo"
-            not in self.identity.columns
+            or "TransactionID" not in self.identity.columns
+            or "DeviceInfo" not in self.identity.columns
         ):
+            return {"device_info": device_info, "transaction_count": 0, "unique_cards": 0}
 
-            return {
-                "device_info":
-                    device_info,
-
-                "transaction_count":
-                    0,
-
-                "unique_cards":
-                    0,
-            }
-
-        device_data = self.identity[
-            [
-                "TransactionID",
-                "DeviceInfo",
-            ]
-        ].copy()
-
-        device_data = (
-            device_data
-            .drop_duplicates(
-                subset=[
-                    "TransactionID"
-                ],
-                keep="first",
-            )
-        )
-
-        transaction_data_df = (
-            self.transactions[
-                [
-                    "TransactionID",
-                    "TransactionDT",
-                    "card1",
-                ]
-            ]
-            .drop_duplicates(
-                subset=[
-                    "TransactionID"
-                ],
-                keep="first",
-            )
-        )
-
-        device_history = (
-            device_data.merge(
-                transaction_data_df,
-                on="TransactionID",
-                how="inner",
-            )
-        )
+        device_data = self.identity[["TransactionID", "DeviceInfo"]].drop_duplicates(subset=["TransactionID"], keep="first")
+        txn_df = self.transactions[["TransactionID", "TransactionDT", "card1"]].drop_duplicates(subset=["TransactionID"], keep="first")
+        device_history = device_data.merge(txn_df, on="TransactionID", how="inner")
 
         history = device_history[
-            (
-                device_history[
-                    "DeviceInfo"
-                ]
-                == device_info
-            )
-            &
-            (
-                device_history[
-                    "TransactionDT"
-                ]
-                < transaction_dt
-            )
+            (device_history["DeviceInfo"] == device_info)
+            & (device_history["TransactionDT"] < transaction_dt)
         ].copy()
 
         if history.empty:
+            return {"device_info": device_info, "transaction_count": 0, "unique_cards": 0}
 
-            return {
-                "device_info":
-                    device_info,
-
-                "transaction_count":
-                    0,
-
-                "unique_cards":
-                    0,
-            }
-
-        unique_cards = (
-            history[
-                "card1"
-            ]
-            .dropna()
-            .nunique()
-        )
-
+        unique_cards = history["card1"].dropna().nunique()
         return {
-            "device_info":
-                device_info,
-
-            "transaction_count":
-                int(
-                    len(history)
-                ),
-
-            "unique_cards":
-                int(
-                    unique_cards
-                ),
+            "device_info": device_info,
+            "transaction_count": int(len(history)),
+            "unique_cards": int(unique_cards),
         }
 
-    # =========================================================
-    # COMPLETE INVESTIGATION DATA
-    # =========================================================
+    # Deterministic Architecture Tools
+    def get_cold_start_status(self, transaction: int | dict[str, Any]) -> dict[str, Any]:
+        tx_data = self.get_transaction(transaction)
+        if "error" in tx_data:
+            return {
+                "is_new_card": True,
+                "is_new_device": True,
+                "is_new_card_device_pair": True,
+                "card_history_available": False,
+                "device_history_available": False,
+                "card_device_history_available": False,
+            }
+        return self.cold_start_detector.detect(tx_data)
 
-    def collect_investigation_data(
-        self,
-        transaction: int | dict[str, Any],
-    ) -> dict[str, Any]:
-        """
-        Collect all deterministic investigation data.
-        """
+    def get_behavioral_risk(self, transaction: int | dict[str, Any]) -> dict[str, Any]:
+        tx_data = self.get_transaction(transaction)
+        cold_start = self.get_cold_start_status(transaction)
+        risk_res = self.get_risk_assessment(transaction)
 
-        transaction_data = (
-            self.get_transaction(
-                transaction
-            )
+        model_risk_score = risk_res.get("risk_score") if "error" not in risk_res else None
+        features = risk_res.get("features") if "error" not in risk_res else {}
+
+        return self.rule_engine.evaluate(
+            transaction=tx_data,
+            model_risk_score=model_risk_score,
+            cold_start_status=cold_start,
+            features=features,
         )
 
-        if "error" in transaction_data:
+    def get_rules_triggered(self, transaction: int | dict[str, Any]) -> list[dict[str, Any]]:
+        behavioral_risk = self.get_behavioral_risk(transaction)
+        return behavioral_risk.get("rules_triggered", [])
 
-            return transaction_data
+    def get_final_decision(self, transaction: int | dict[str, Any]) -> str:
+        risk_res = self.get_risk_assessment(transaction)
+        model_score = risk_res.get("risk_score", 0.0) if "error" not in risk_res else 0.0
+        model_level = risk_res.get("risk_level", "LOW") if "error" not in risk_res else "LOW"
 
-        risk = (
-            self.get_risk_assessment(
-                transaction
-            )
+        behavioral_res = self.get_behavioral_risk(transaction)
+        behavioral_level = behavioral_res.get("behavioral_risk_level", "LOW")
+        rules_triggered = behavioral_res.get("rules_triggered", [])
+        cold_start = self.get_cold_start_status(transaction)
+
+        return self.decision_engine.decide(
+            model_risk_score=model_score,
+            model_risk_level=model_level,
+            behavioral_risk_level=behavioral_level,
+            cold_start_status=cold_start,
+            rules_triggered=rules_triggered,
         )
 
-        if "error" in risk:
+    def collect_investigation_data(self, transaction: int | dict[str, Any]) -> dict[str, Any]:
+        tx_data = self.get_transaction(transaction)
+        if "error" in tx_data:
+            return tx_data
 
-            return risk
+        risk_res = self.get_risk_assessment(transaction)
+        if "error" in risk_res:
+            return risk_res
 
-        card_history = (
-            self.get_card_history(
-                transaction
-            )
-        )
+        cold_start = self.get_cold_start_status(transaction)
+        behavioral_risk = self.get_behavioral_risk(transaction)
+        card_history = self.get_card_history(transaction)
+        device_history = self.get_device_history(transaction)
+        final_decision = self.get_final_decision(transaction)
 
-        if "error" in card_history:
+        model_risk_info = {
+            "model_score": risk_res.get("risk_score", 0.0),
+            "model_level": risk_res.get("risk_level", "LOW"),
+            "model_decision": risk_res.get("decision", "APPROVE"),
+        }
 
-            return card_history
+        behavioral_risk_info = {
+            "score": behavioral_risk.get("behavioral_risk_score", 0.0),
+            "level": behavioral_risk.get("behavioral_risk_level", "LOW"),
+            "rules_triggered": behavioral_risk.get("rules_triggered", []),
+        }
 
-        device_history = (
-            self.get_device_history(
-                transaction
-            )
-        )
-
-        if "error" in device_history:
-
-            return device_history
+        cold_start_info = {
+            "is_new_card": cold_start.get("is_new_card", True),
+            "is_new_device": cold_start.get("is_new_device", True),
+            "is_new_card_device_pair": cold_start.get("is_new_card_device_pair", True),
+            "card_history_available": cold_start.get("card_history_available", False),
+            "device_history_available": cold_start.get("device_history_available", False),
+        }
 
         return {
-            "transaction":
-                transaction_data,
-
-            "risk_assessment":
-                risk,
-
-            "card_history":
-                card_history,
-
-            "device_history":
-                device_history,
+            "transaction_id": tx_data.get("TransactionID"),
+            "transaction": tx_data,
+            "risk": model_risk_info,
+            "behavioral_risk": behavioral_risk_info,
+            "final_decision": final_decision,
+            "cold_start": cold_start_info,
+            "input_completeness": risk_res.get("input_completeness", "COMPLETE"),
+            "evidence": risk_res.get("evidence", []),
+            "card_history": card_history,
+            "device_history": device_history,
         }

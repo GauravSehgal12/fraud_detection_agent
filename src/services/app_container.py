@@ -4,14 +4,13 @@ from pathlib import Path
 import pandas as pd
 
 from src.services.model_loader import ModelLoader
+from src.services.cold_start_detector import ColdStartDetector
+from src.services.rule_engine import RuleEngine
+from src.services.decision_engine import DecisionEngine
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-
-# ============================================================
-# PATHS
-# ============================================================
 
 TRANSACTIONS_PATH = (
     PROJECT_ROOT
@@ -43,477 +42,136 @@ RISK_PATH = (
 class AppContainer:
 
     def __init__(self):
-
-        # ====================================================
-        # MODEL
-        # ====================================================
-
         self.model = None
         self.features = None
 
-        # ====================================================
-        # DATA
-        # ====================================================
-
-        # Raw transaction dataframe
         self.raw_transactions = None
-
-        # Identity dataframe
         self.identity = None
-
-        # Transaction + identity merged dataframe
         self.transactions = None
-
-        # Existing investigation history
         self.investigation_history = None
-
-        # Persisted risk assessments
         self.risk_assessments = None
 
-        # Agent
+        # Architecture services
+        self.cold_start_detector = None
+        self.rule_engine = None
+        self.decision_engine = None
+
         self.agent = None
 
-    # ========================================================
-    # MODEL
-    # ========================================================
-
     def load_model(self):
-
-        print(
-            "\nLoading model..."
-        )
-
+        print("\nLoading model...")
         loader = ModelLoader()
-
         loaded = loader.load_all()
-
         self.model = loaded["model"]
-
         self.features = loaded["features"]
-
-        print(
-            "XGBoost model loaded."
-        )
-
-        print(
-            "Model features:",
-            len(self.features)
-        )
-
-    # ========================================================
-    # DATA
-    # ========================================================
+        print("XGBoost model loaded.")
+        print(f"Model features: {len(self.features)}")
 
     def load_data(self):
-
-        # ====================================================
-        # CHECK FILES
-        # ====================================================
-
         if not TRANSACTIONS_PATH.exists():
-
-            raise FileNotFoundError(
-                "Transaction data not found: "
-                f"{TRANSACTIONS_PATH}"
-            )
+            raise FileNotFoundError(f"Transaction data not found: {TRANSACTIONS_PATH}")
 
         if not IDENTITY_PATH.exists():
-
-            raise FileNotFoundError(
-                "Identity data not found: "
-                f"{IDENTITY_PATH}"
-            )
+            raise FileNotFoundError(f"Identity data not found: {IDENTITY_PATH}")
 
         if not HISTORY_PATH.exists():
-
-            raise FileNotFoundError(
-                "Investigation history not found: "
-                f"{HISTORY_PATH}"
-            )
+            raise FileNotFoundError(f"Investigation history not found: {HISTORY_PATH}")
 
         if not RISK_PATH.exists():
+            raise FileNotFoundError(f"Risk assessments not found: {RISK_PATH}")
 
-            raise FileNotFoundError(
-                "Risk assessments not found: "
-                f"{RISK_PATH}"
-            )
+        print("\nLoading ORIGINAL transaction data...")
+        self.raw_transactions = pd.read_csv(TRANSACTIONS_PATH)
+        print(f"Raw transaction shape: {self.raw_transactions.shape}")
 
-        # ====================================================
-        # LOAD RAW TRANSACTIONS
-        # ====================================================
+        print("\nLoading identity data...")
+        self.identity = pd.read_csv(IDENTITY_PATH)
+        print(f"Identity shape: {self.identity.shape}")
 
-        print(
-            "\nLoading ORIGINAL transaction data..."
-        )
+        print("\nMerging transaction + identity...")
+        if "TransactionID" not in self.raw_transactions.columns:
+            raise ValueError("Transaction data does not contain 'TransactionID'.")
 
-        self.raw_transactions = pd.read_csv(
-            TRANSACTIONS_PATH
-        )
-
-        print(
-            "Raw transaction shape:",
-            self.raw_transactions.shape
-        )
-
-        print(
-            "Raw transaction columns:",
-            len(
-                self.raw_transactions.columns
-            )
-        )
-
-        # ====================================================
-        # LOAD IDENTITY
-        # ====================================================
-
-        print(
-            "\nLoading identity data..."
-        )
-
-        self.identity = pd.read_csv(
-            IDENTITY_PATH
-        )
-
-        print(
-            "Identity shape:",
-            self.identity.shape
-        )
-
-        print(
-            "Identity columns:",
-            len(
-                self.identity.columns
-            )
-        )
-
-        # ====================================================
-        # MERGE TRANSACTION + IDENTITY
-        # ====================================================
-
-        print(
-            "\nMerging transaction + identity..."
-        )
-
-        if "TransactionID" not in (
-            self.raw_transactions.columns
-        ):
-
-            raise ValueError(
-                "Transaction data does not contain "
-                "'TransactionID'."
-            )
-
-        if "TransactionID" not in (
-            self.identity.columns
-        ):
-
-            raise ValueError(
-                "Identity data does not contain "
-                "'TransactionID'."
-            )
-
-        # ----------------------------------------------------
-        # Avoid duplicate columns
-        # ----------------------------------------------------
+        if "TransactionID" not in self.identity.columns:
+            raise ValueError("Identity data does not contain 'TransactionID'.")
 
         identity_columns = [
-            column
-            for column in self.identity.columns
-            if column != "TransactionID"
+            col for col in self.identity.columns if col != "TransactionID"
         ]
 
-        identity_for_merge = (
-            self.identity[
-                [
-                    "TransactionID",
-                    *identity_columns,
-                ]
-            ]
-            .drop_duplicates(
-                subset=[
-                    "TransactionID"
-                ],
-                keep="first",
-            )
+        identity_for_merge = self.identity[
+            ["TransactionID", *identity_columns]
+        ].drop_duplicates(subset=["TransactionID"], keep="first")
+
+        self.transactions = self.raw_transactions.merge(
+            identity_for_merge,
+            on="TransactionID",
+            how="left",
+            sort=False,
         )
 
-        # ----------------------------------------------------
-        # Left merge
-        # ----------------------------------------------------
+        print(f"Merged transaction shape: {self.transactions.shape}")
 
-        self.transactions = (
-            self.raw_transactions.merge(
-                identity_for_merge,
-                on="TransactionID",
-                how="left",
-                sort=False,
-            )
-        )
+        print("\nLoading investigation history...")
+        self.investigation_history = pd.read_csv(HISTORY_PATH)
 
-        print(
-            "Merged transaction shape:",
-            self.transactions.shape
-        )
-
-        print(
-            "Merged transaction columns:",
-            len(
-                self.transactions.columns
-            )
-        )
-
-        # ====================================================
-        # VERIFY MERGED DATA
-        # ====================================================
-
-        print(
-            "\n========== MERGED DATA CHECK =========="
-        )
-
-        print(
-            "Raw columns:",
-            len(
-                self.raw_transactions.columns
-            )
-        )
-
-        print(
-            "Identity columns:",
-            len(
-                self.identity.columns
-            )
-        )
-
-        print(
-            "Merged columns:",
-            len(
-                self.transactions.columns
-            )
-        )
-
-        if "DeviceInfo" in (
-            self.transactions.columns
-        ):
-
-            print(
-                "DeviceInfo: available"
-            )
-
-        else:
-
-            print(
-                "DeviceInfo: NOT AVAILABLE"
-            )
-
-        print(
-            "========================================\n"
-        )
-
-        # ====================================================
-        # LOAD INVESTIGATION HISTORY
-        # ====================================================
-
-        print(
-            "Loading investigation history..."
-        )
-
-        self.investigation_history = (
-            pd.read_csv(
-                HISTORY_PATH
-            )
-        )
-
-        print(
-            "Investigation history shape:",
-            self.investigation_history.shape
-        )
-
-        # ====================================================
-        # LOAD RISK ASSESSMENTS
-        # ====================================================
-
-        print(
-            "\nLoading risk assessments..."
-        )
-
-        with open(
-            RISK_PATH,
-            "r"
-        ) as f:
-
-            self.risk_assessments = (
-                json.load(f)
-            )
-
-        # JSON object keys are strings.
-        # Convert transaction IDs back to integers.
+        print("\nLoading risk assessments...")
+        with open(RISK_PATH, "r") as f:
+            raw_risk = json.load(f)
 
         self.risk_assessments = {
-
-            int(transaction_id):
-                assessment
-
-            for (
-                transaction_id,
-                assessment
-            )
-            in self.risk_assessments.items()
+            int(k): v for k, v in raw_risk.items()
         }
 
-        print(
-            "Risk assessments loaded:",
-            len(
-                self.risk_assessments
-            )
+    def init_services(self):
+        """
+        Initialize ColdStartDetector, RuleEngine, and DecisionEngine.
+        """
+        print("\nInitializing ColdStartDetector...")
+        self.cold_start_detector = ColdStartDetector(
+            transactions=self.raw_transactions,
+            identity=self.identity,
         )
+        print("Cold-start detector initialized")
 
-    # ========================================================
-    # LOAD EVERYTHING
-    # ========================================================
+        print("Initializing RuleEngine...")
+        self.rule_engine = RuleEngine()
+        print("Rule engine initialized")
+
+        print("Initializing DecisionEngine...")
+        self.decision_engine = DecisionEngine()
+        print("Decision engine initialized")
 
     def load_all(self):
-
-        print(
-            "\n"
-            "=========================================="
-        )
-
-        print(
-            "INITIALIZING APPLICATION CONTAINER"
-        )
-
-        print(
-            "=========================================="
-        )
-
-        # ----------------------------------------------------
-        # Model
-        # ----------------------------------------------------
+        print("\n==========================================")
+        print("INITIALIZING APPLICATION CONTAINER")
+        print("==========================================")
 
         self.load_model()
-
-        # ----------------------------------------------------
-        # Data
-        # ----------------------------------------------------
-
         self.load_data()
+        self.init_services()
 
-        # ====================================================
-        # FINAL VALIDATION
-        # ====================================================
-
-        print(
-            "\n========== CONTAINER VALIDATION =========="
-        )
-
-        print(
-            "Model loaded:",
-            self.model is not None
-        )
-
-        print(
-            "Features loaded:",
-            self.features is not None
-        )
-
-        print(
-            "Raw transactions loaded:",
-            self.raw_transactions is not None
-        )
-
-        print(
-            "Identity loaded:",
-            self.identity is not None
-        )
-
-        print(
-            "Merged transactions loaded:",
-            self.transactions is not None
-        )
-
-        print(
-            "Investigation history loaded:",
-            self.investigation_history is not None
-        )
-
-        print(
-            "Risk assessments loaded:",
-            self.risk_assessments is not None
-        )
-
-        if self.raw_transactions is not None:
-
-            print(
-                "Raw transaction rows:",
-                len(
-                    self.raw_transactions
-                )
-            )
-
-            print(
-                "Raw transaction columns:",
-                len(
-                    self.raw_transactions.columns
-                )
-            )
-
-        if self.identity is not None:
-
-            print(
-                "Identity rows:",
-                len(
-                    self.identity
-                )
-            )
-
-            print(
-                "Identity columns:",
-                len(
-                    self.identity.columns
-                )
-            )
-
-        if self.transactions is not None:
-
-            print(
-                "Merged rows:",
-                len(
-                    self.transactions
-                )
-            )
-
-            print(
-                "Merged columns:",
-                len(
-                    self.transactions.columns
-                )
-            )
-
-        print(
-            "==========================================\n"
-        )
+        print("\n========== CONTAINER VALIDATION ==========")
+        print("Model loaded:", self.model is not None)
+        print("Features loaded:", len(self.features) if self.features else 0)
+        print("Raw transactions loaded:", self.raw_transactions.shape if self.raw_transactions is not None else None)
+        print("Identity loaded:", self.identity.shape if self.identity is not None else None)
+        print("Merged transactions loaded:", self.transactions.shape if self.transactions is not None else None)
+        print("Cold-start detector ready:", self.cold_start_detector is not None)
+        print("Rule engine ready:", self.rule_engine is not None)
+        print("Decision engine ready:", self.decision_engine is not None)
+        print("==========================================\n")
 
         return self
 
-    # ========================================================
-    # READY
-    # ========================================================
-
     def is_ready(self) -> bool:
-
         return (
-
             self.model is not None
-
             and self.features is not None
-
             and self.raw_transactions is not None
-
             and self.identity is not None
-
             and self.transactions is not None
-
-            and self.investigation_history is not None
-
-            and self.risk_assessments is not None
+            and self.cold_start_detector is not None
+            and self.rule_engine is not None
+            and self.decision_engine is not None
         )
