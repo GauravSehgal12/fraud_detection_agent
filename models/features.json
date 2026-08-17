@@ -1,0 +1,23 @@
+[
+  "TransactionAmt",
+  "TransactionAmt_log",
+  "transaction_hour",
+  "transaction_day",
+  "has_identity",
+  "missing_card_info",
+  "missing_address",
+  "missing_value_count",
+  "card_transaction_count",
+  "card_avg_amount",
+  "amount_vs_card_avg",
+  "new_card",
+  "card_txn_count_1h",
+  "card_txn_count_24h",
+  "has_device_info",
+  "device_profile_count",
+  "device_profile_unique_cards",
+  "new_device_profile",
+  "card_device_transaction_count",
+  "card_device_seen_before",
+  "device_unique_cards_historical"
+]

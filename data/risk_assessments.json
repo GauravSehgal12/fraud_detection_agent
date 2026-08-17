@@ -1,0 +1,45 @@
+{
+  "3409570": {
+    "transaction_id": 3409570,
+    "risk_score": 0.9847,
+    "risk_level": "HIGH",
+    "decision": "REVIEW",
+    "evidence": [
+      {
+        "feature": "missing_value_count",
+        "value": 95.0,
+        "shap_value": 2.1026599407196045,
+        "impact": "increases_risk",
+        "explanation": "The transaction contains 95 missing values; this missing-data pattern increases model risk."
+      },
+      {
+        "feature": "missing_address",
+        "value": 1.0,
+        "shap_value": 0.8443207740783691,
+        "impact": "increases_risk",
+        "explanation": "Address information is missing."
+      },
+      {
+        "feature": "TransactionAmt",
+        "value": 87.302,
+        "shap_value": 0.3537260890007019,
+        "impact": "increases_risk",
+        "explanation": "Transaction amount is 87.30; this feature increases model risk."
+      },
+      {
+        "feature": "card_avg_amount",
+        "value": 45.337777070063694,
+        "shap_value": 0.29721418023109436,
+        "impact": "increases_risk",
+        "explanation": "Historical average amount for the card is 45.34; this feature increases model risk."
+      },
+      {
+        "feature": "card_transaction_count",
+        "value": 157.0,
+        "shap_value": 0.2583445608615875,
+        "impact": "increases_risk",
+        "explanation": "The card has 157 previous transactions in the observed history."
+      }
+    ]
+  }
+}
