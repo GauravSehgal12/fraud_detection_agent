@@ -1,5 +1,4 @@
 from typing import Any
-
 import pandas as pd
 
 
@@ -7,9 +6,11 @@ class FraudInvestigationTools:
 
     def __init__(
         self,
-        transactions: pd.DataFrame
+        transactions: pd.DataFrame,
+        risk_assessments: dict[int, dict] | None = None
     ):
         self.transactions = transactions
+        self.risk_assessments = risk_assessments or {}
 
     def get_transaction(
         self,
@@ -38,21 +39,41 @@ class FraudInvestigationTools:
             "TransactionDT": int(
                 row["TransactionDT"]
             ),
+            "card1": (
+                int(row["card1"])
+                if pd.notna(row["card1"])
+                else None
+            ),
+            "DeviceInfo": (
+                str(row["DeviceInfo"])
+                if pd.notna(row["DeviceInfo"])
+                else None
+            ),
         }
-
 
     def get_card_history(
     self,
-    card1: int
-    ) -> dict[str, Any]:
+    card1: int,
+    before_transaction_dt: int | None = None
+) -> dict[str, Any]:
 
         rows = self.transactions[
         self.transactions["card1"] == card1
-    ].sort_values("TransactionDT")
+    ]
+
+        if before_transaction_dt is not None:
+            rows = rows[
+            rows["TransactionDT"]
+            < before_transaction_dt
+        ]
+
+        rows = rows.sort_values(
+        "TransactionDT"
+    )
 
         if rows.empty:
             return {
-            "error": "Card history not found."
+            "error": "No historical card activity found."
         }
 
         return {
@@ -69,10 +90,10 @@ class FraudInvestigationTools:
         ),
     }
 
-
     def get_device_history(
     self,
-    device_info: str
+    device_info: str,
+    before_transaction_dt: int | None = None
 ) -> dict[str, Any]:
 
         rows = self.transactions[
@@ -80,9 +101,15 @@ class FraudInvestigationTools:
         == device_info
     ]
 
+        if before_transaction_dt is not None:
+            rows = rows[
+            rows["TransactionDT"]
+            < before_transaction_dt
+        ]
+
         if rows.empty:
             return {
-            "error": "Device history not found."
+            "error": "No historical device activity found."
         }
 
         return {
@@ -92,3 +119,19 @@ class FraudInvestigationTools:
             rows["card1"].nunique()
         ),
     }
+
+    def get_risk_assessment(
+        self,
+        transaction_id: int
+    ) -> dict[str, Any]:
+
+        assessment = self.risk_assessments.get(
+            int(transaction_id)
+        )
+
+        if assessment is None:
+            return {
+                "error": "Risk assessment not found."
+            }
+
+        return assessment
