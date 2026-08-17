@@ -5,6 +5,7 @@ from src.api.schemas import (
     InvestigationResponse
 )
 
+
 router = APIRouter()
 
 agent = None
@@ -21,7 +22,6 @@ def set_agent(fraud_agent):
 def health():
 
     if agent is None:
-
         return {
             "status": "starting"
         }

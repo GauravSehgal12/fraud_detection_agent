@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 
-import pandas as pd
 from fastapi import FastAPI
 
 from src.agent.tools import FraudInvestigationTools
@@ -28,21 +27,15 @@ async def lifespan(app: FastAPI):
 
     container.load_all()
 
-    features = container.features or []
+    features = container.features
+
     investigation_history = (
-        container.investigation_history or []
+        container.investigation_history
     )
-    risk_assessments = container.risk_assessments
-    if risk_assessments is None:
-        risk_assessments = {}
-    elif isinstance(risk_assessments, list):
-        risk_assessments = {
-            int(index): item for index, item in enumerate(risk_assessments)
-        }
-    elif isinstance(risk_assessments, dict):
-        risk_assessments = {
-            int(key): value for key, value in risk_assessments.items()
-        }
+
+    risk_assessments = (
+        container.risk_assessments
+    )
 
     print(
         "XGBoost model loaded."
@@ -66,14 +59,8 @@ async def lifespan(app: FastAPI):
     # 2. Create investigation tools
     # -----------------------------------------
 
-    transactions_df = (
-        investigation_history
-        if isinstance(investigation_history, pd.DataFrame)
-        else pd.DataFrame(investigation_history)
-    )
-
     tools = FraudInvestigationTools(
-        transactions=transactions_df,
+        transactions=investigation_history,
         risk_assessments=risk_assessments
     )
 
@@ -98,7 +85,6 @@ async def lifespan(app: FastAPI):
     agent = FraudInvestigationAgent(
         tools=tools,
         llm=llm
-
     )
 
     print(
@@ -111,7 +97,7 @@ async def lifespan(app: FastAPI):
 
     set_agent(agent)
 
-    object.__setattr__(container, "agent", agent)
+    container.agent = agent
 
     print(
         "Financial Fraud Risk API is ready."
