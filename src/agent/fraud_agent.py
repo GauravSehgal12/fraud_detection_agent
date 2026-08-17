@@ -4,11 +4,16 @@ from typing import Any
 from src.agent.tools import FraudInvestigationTools
 from src.agent.llm import FraudLLM
 from src.agent.prompt import INVESTIGATION_PROMPT
+from src.guardrails.output_guardrails import OutputGuardrail
 
 
 def build_llm_context(
     investigation: dict
 ) -> str:
+    """
+    Convert the deterministic investigation package
+    into a JSON string for the LLM.
+    """
 
     return json.dumps(
         investigation,
@@ -24,16 +29,26 @@ class FraudInvestigationAgent:
         tools: FraudInvestigationTools,
         llm: FraudLLM
     ):
+        """
+        Initialize the fraud investigation agent.
+        """
 
         self.tools = tools
         self.llm = llm
+        self.guardrail = OutputGuardrail()
 
     def investigate(
         self,
         transaction_id: int
     ) -> dict[str, Any]:
+        """
+        Collect deterministic evidence for a transaction.
 
-        # 1. Get transaction
+        The LLM is NOT involved in this step.
+        """
+
+       
+
         transaction = self.tools.get_transaction(
             transaction_id
         )
@@ -41,37 +56,52 @@ class FraudInvestigationAgent:
         if "error" in transaction:
             return transaction
 
-        # 2. Get risk assessment
-        risk = self.tools.get_risk_assessment(
-            transaction_id
+     
+
+        risk_assessment = (
+            self.tools.get_risk_assessment(
+                transaction_id
+            )
         )
 
-        if "error" in risk:
-            return risk
+        if "error" in risk_assessment:
+            return risk_assessment
 
-        # 3. Get card history
-        card_history = self.tools.get_card_history(
-            transaction["card1"],
-            transaction["TransactionDT"]
+       
+
+        card_history = (
+            self.tools.get_card_history(
+                transaction["card1"],
+                transaction["TransactionDT"]
+            )
         )
 
-        # 4. Get device history
+       
+
         device_history = None
 
-        if transaction["DeviceInfo"]:
+        device_info = transaction.get(
+            "DeviceInfo"
+        )
+
+        if device_info:
 
             device_history = (
                 self.tools.get_device_history(
-                    transaction["DeviceInfo"],
+                    device_info,
                     transaction["TransactionDT"]
                 )
             )
 
-        # 5. Return complete investigation
+       
+
         return {
             "transaction": transaction,
-            "risk_assessment": risk,
+
+            "risk_assessment": risk_assessment,
+
             "card_history": card_history,
+
             "device_history": device_history
         }
 
@@ -79,30 +109,63 @@ class FraudInvestigationAgent:
         self,
         transaction_id: int
     ) -> str:
+        """
+        Generate a human-readable fraud investigation
+        report using the LLM.
 
-        # Run deterministic investigation
+        The LLM only receives evidence collected by
+        the deterministic investigation layer.
+        """
+
+      
+
         investigation = self.investigate(
             transaction_id
         )
 
-        # Handle errors
+         
+
         if "error" in investigation:
+
             return investigation["error"]
 
-        # Convert investigation data to JSON
+        
+
         context = build_llm_context(
             investigation
         )
 
-        # Send ONLY the investigation evidence
-        # to the LLM
+       
+
         report = self.llm.generate(
             system_prompt=INVESTIGATION_PROMPT,
+
             user_prompt=(
-                "Investigate this transaction using "
-                "ONLY the supplied evidence.\n\n"
+                "Investigate the following transaction "
+                "using ONLY the supplied evidence.\n\n"
+
+                "Do not invent information.\n"
+                "Do not modify the risk score.\n"
+                "Do not modify the risk level.\n"
+                "Do not modify the decision.\n\n"
+
                 f"{context}"
             )
         )
 
-        return report
+     
+
+        validated_report = (
+            self.guardrail.validate(
+                report=report,
+                risk_assessment=(
+                    investigation[
+                        "risk_assessment"
+                    ]
+                )
+            )
+        )
+
+       
+
+        return validated_report
