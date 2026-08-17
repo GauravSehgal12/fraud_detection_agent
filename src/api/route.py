@@ -7,8 +7,6 @@ from src.api.schemas import (
 
 router = APIRouter()
 
-
-# This will be assigned when the application starts
 agent = None
 
 
@@ -21,6 +19,12 @@ def set_agent(fraud_agent):
 
 @router.get("/health")
 def health():
+
+    if agent is None:
+
+        return {
+            "status": "starting"
+        }
 
     return {
         "status": "healthy"
@@ -42,9 +46,18 @@ def investigate(
             detail="Fraud agent is not initialized."
         )
 
-    report = agent.generate_report(
-        request.transaction_id
-    )
+    try:
+
+        report = agent.generate_report(
+            request.transaction_id
+        )
+
+    except Exception as exc:
+
+        raise HTTPException(
+            status_code=500,
+            detail="Investigation failed."
+        ) from exc
 
     if report == "Transaction not found.":
 
