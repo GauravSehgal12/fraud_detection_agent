@@ -6,6 +6,10 @@ from src.agent.llm import FraudLLM
 from src.agent.prompt import INVESTIGATION_PROMPT
 from src.guardrails.output_guardrails import OutputGuardrail
 
+from src.guardrails.input_guardrails import (
+    InputGuardrail
+)
+
 
 def build_llm_context(
     investigation: dict
@@ -27,7 +31,8 @@ class FraudInvestigationAgent:
     def __init__(
         self,
         tools: FraudInvestigationTools,
-        llm: FraudLLM
+        llm: FraudLLM,
+        input_guardrail: InputGuardrail
     ):
         """
         Initialize the fraud investigation agent.
@@ -35,6 +40,7 @@ class FraudInvestigationAgent:
 
         self.tools = tools
         self.llm = llm
+        self.input_guardrail = input_guardrail
         self.guardrail = OutputGuardrail()
 
     def investigate(
@@ -109,6 +115,7 @@ class FraudInvestigationAgent:
         self,
         transaction_id: int
     ) -> str:
+        
         """
         Generate a human-readable fraud investigation
         report using the LLM.
@@ -116,6 +123,12 @@ class FraudInvestigationAgent:
         The LLM only receives evidence collected by
         the deterministic investigation layer.
         """
+        transaction_id = (
+        self.input_guardrail
+        .validate_transaction_id(
+            transaction_id
+        )
+    )
 
       
 

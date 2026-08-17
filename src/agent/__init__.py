@@ -1,0 +1,1 @@
+self.input_guardrail = InputGuardrail()
