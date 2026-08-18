@@ -26,56 +26,37 @@ CALIBRATOR_PATH = PROJECT_ROOT / "models" / "isotonic_calibrator.joblib"
 
 
 def conservative_behavioral_scores(df: pd.DataFrame) -> np.ndarray:
-    """
-    Build a conservative behavioral ranking score for fusion diagnostics.
+    """Score only historical behavioral anomalies that are supported by diagnostics.
 
-    Intentionally excluded:
-      - generic TransactionAmt > $200 rule
-      - new_card + new_device / unseen card-device pair as standalone risk
-
-    Kept because prior temporal diagnostics showed incremental value:
-      - short-term velocity
-      - heavily shared devices
-      - transaction amount relative to established card history
-      - very high amount as a small secondary signal
-
-    New-card/device cold-start status is treated as context, not evidence of
-    fraud by itself.
+    Cold-start indicators and shared-device counts are deliberately excluded from
+    the numeric overlay because the latest stability run showed degradation in
+    new-card and shared-device segments.
     """
     amount = pd.to_numeric(df["TransactionAmt"], errors="coerce").fillna(0.0)
     amount_ratio = pd.to_numeric(df["amount_vs_card_avg"], errors="coerce").fillna(1.0)
     velocity_1h = pd.to_numeric(df["card_txn_count_1h"], errors="coerce").fillna(0.0)
     velocity_24h = pd.to_numeric(df["card_txn_count_24h"], errors="coerce").fillna(0.0)
-    shared_cards = pd.to_numeric(df["device_profile_unique_cards"], errors="coerce").fillna(0.0)
     known_card = pd.to_numeric(df["new_card"], errors="coerce").fillna(0.0).eq(0)
 
-    # Velocity: strong only when repeated activity exists in a short window.
+    # Short-term repeated activity is the strongest retained behavioral signal.
     velocity_score = np.maximum(
         np.clip(velocity_1h / 3.0, 0.0, 1.0),
         np.clip(velocity_24h / 10.0, 0.0, 1.0),
     )
 
-    # Shared-device score starts only after multiple cards. This avoids
-    # treating a single unfamiliar device as suspicious.
-    shared_device_score = np.maximum(
-        np.clip((shared_cards - 5.0) / 15.0, 0.0, 1.0),
-        np.clip((shared_cards - 10.0) / 10.0, 0.0, 1.0),
-    )
-
-    # Personalized amount anomaly is meaningful only for an established card.
+    # Relative amount is useful only when a card has established history.
     unusual_amount_score = np.where(
         known_card,
         np.clip((amount_ratio - 1.5) / 2.5, 0.0, 1.0),
         0.0,
     )
 
-    # Very high amount is deliberately a small secondary signal, not a rule.
+    # Keep absolute amount as a tiny secondary signal only for very large values.
     high_amount_score = np.clip((amount - 500.0) / 500.0, 0.0, 1.0)
 
     score = (
-        0.35 * velocity_score
-        + 0.35 * shared_device_score
-        + 0.25 * unusual_amount_score
+        0.50 * velocity_score
+        + 0.45 * unusual_amount_score
         + 0.05 * high_amount_score
     )
     return np.clip(score, 0.0, 1.0).astype(float)
@@ -152,8 +133,8 @@ def _compare_segment(name: str, df: pd.DataFrame, y: np.ndarray, baseline: np.nd
 
 def run() -> dict[str, Any]:
     print("\n========== FUSION SEGMENT DIAGNOSTICS ==========")
-    print("Behavioral scorer: conservative_stable_signals_v2")
-    print("Excluded: generic amount > $200; unseen card-device pair as standalone evidence")
+    print("Behavioral scorer: conservative_stable_signals_v3")
+    print("Excluded: new-card/device cold-start signals; shared-device counts; generic amount > $200")
 
     df = load_feature_store()
     _, validation_df, _ = time_based_split(df)
@@ -202,9 +183,20 @@ def run() -> dict[str, Any]:
     )[:5]
 
     result = {
-        "behavioral_scorer": "conservative_stable_signals_v2",
-        "excluded_signals": ["generic_amount_gt_200", "new_card_device_pair_as_standalone_signal"],
-        "retained_signals": ["velocity_1h", "velocity_24h", "shared_device_10plus_cards", "shared_device_20plus_cards", "amount_vs_card_avg", "high_amount_gt_500_small_weight"],
+        "behavioral_scorer": "conservative_stable_signals_v3",
+        "excluded_signals": [
+            "new_card_cold_start",
+            "new_device_cold_start",
+            "new_card_device_pair_as_standalone_signal",
+            "shared_device_counts",
+            "generic_amount_gt_200",
+        ],
+        "retained_signals": [
+            "velocity_1h",
+            "velocity_24h",
+            "amount_vs_card_avg_for_known_card",
+            "high_amount_gt_500_small_weight",
+        ],
         "policy": policy,
         "stability_window": {
             "rows": int(len(stability_df)),
@@ -219,9 +211,9 @@ def run() -> dict[str, Any]:
         "worst_fusion_segments_by_recall": worst,
         "best_fusion_segments_by_recall": best,
         "interpretation": {
-            "purpose": "Identify temporal segments where the conservative behavioral overlay loses recall or precision versus the calibrated-model baseline at fixed 5% review capacity.",
+            "purpose": "Identify temporal segments where the behavioral overlay loses recall or precision versus the calibrated-model baseline at fixed 5% review capacity.",
             "do_not_use_test_for_tuning": True,
-            "next_step": "If stability improves, port the same conservative scoring logic into the production behavioral scorer before evaluating on the untouched test set.",
+            "next_step": "Only promote the behavioral overlay if the later stability window shows no material degradation versus the calibrated baseline.",
         },
     }
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
