@@ -81,11 +81,11 @@ class AppContainer:
             raise FileNotFoundError(f"Risk assessments not found: {RISK_PATH}")
 
         print("\nLoading ORIGINAL transaction data...")
-        self.raw_transactions = pd.read_csv(TRANSACTIONS_PATH)
+        self.raw_transactions = pd.read_csv(TRANSACTIONS_PATH, engine="pyarrow")
         print(f"Raw transaction shape: {self.raw_transactions.shape}")
 
         print("\nLoading identity data...")
-        self.identity = pd.read_csv(IDENTITY_PATH)
+        self.identity = pd.read_csv(IDENTITY_PATH, engine="pyarrow")
         print(f"Identity shape: {self.identity.shape}")
 
         print("\nMerging transaction + identity...")
