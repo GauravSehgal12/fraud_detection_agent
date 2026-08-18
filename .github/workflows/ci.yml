@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Python tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Compile application
+        run: python -m compileall -q app.py src
+
+      - name: Run unit tests that do not require private/raw datasets
+        run: |
+          pytest -q \
+            tests/test_cold_start.py \
+            tests/test_decision_engine.py \
+            tests/test_rule_engine.py
+
+  production-artifacts:
+    name: Validate V1 production artifacts
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install runtime dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate V1 model and feature configuration
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          import xgboost as xgb
+
+          model_path = Path("models/fraud_xgboost.json")
+          feature_path = Path("models/features.json")
+          calibrator_path = Path("models/isotonic_calibrator.joblib")
+
+          for path in (model_path, feature_path, calibrator_path):
+              if not path.exists():
+                  raise SystemExit(f"Missing production artifact: {path}")
+
+          features = json.loads(feature_path.read_text(encoding="utf-8"))
+          if len(features) != 21:
+              raise SystemExit(
+                  f"Expected V1 feature configuration with 21 features, found {len(features)}"
+              )
+
+          model = xgb.XGBClassifier()
+          model.load_model(model_path)
+
+          if model.n_features_in_ != len(features):
+              raise SystemExit(
+                  f"Model expects {model.n_features_in_} features but features.json contains {len(features)}"
+              )
+
+          print(f"V1 production model validated: {len(features)} features")
+          print(f"Model artifact: {model_path}")
+          print(f"Calibrator artifact: {calibrator_path}")
+          PY
