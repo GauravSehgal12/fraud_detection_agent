@@ -27,8 +27,9 @@ CALIBRATOR_PATH = PROJECT_ROOT / "models" / "isotonic_calibrator.joblib"
 FUSION_CONFIG_PATH = PROJECT_ROOT / "models" / "risk_fusion_config.json"
 
 MAX_REVIEW_RATE = 0.10
+TARGET_REVIEW_RATE = 0.05
 WEIGHT_GRID = tuple(np.round(np.arange(0.50, 1.01, 0.05), 2))
-THRESHOLD_GRID = tuple(np.round(np.arange(0.30, 0.91, 0.05), 2))
+THRESHOLD_GRID = tuple(np.round(np.arange(0.05, 0.91, 0.05), 2))
 
 
 def _json_safe(value: Any) -> Any:
@@ -60,7 +61,10 @@ def load_feature_store() -> pd.DataFrame:
     }
     missing = sorted(required - set(features_df.columns))
     if missing:
-        raise ValueError("Feature store is missing columns required for evaluation: " + ", ".join(missing))
+        raise ValueError(
+            "Feature store is missing columns required for evaluation: "
+            + ", ".join(missing)
+        )
 
     print(f"Feature store shape: {features_df.shape}")
     print(f"Loading labels from: {TRANSACTION_PATH}")
@@ -68,10 +72,17 @@ def load_feature_store() -> pd.DataFrame:
     if labels_df["TransactionID"].duplicated().any():
         raise ValueError("Duplicate TransactionID values found in label data.")
 
-    df = features_df.merge(labels_df, on="TransactionID", how="left", validate="one_to_one")
+    df = features_df.merge(
+        labels_df,
+        on="TransactionID",
+        how="left",
+        validate="one_to_one",
+    )
     missing_labels = int(df["isFraud"].isna().sum())
     if missing_labels:
-        raise ValueError(f"{missing_labels:,} feature-store rows have no matching isFraud label.")
+        raise ValueError(
+            f"{missing_labels:,} feature-store rows have no matching isFraud label."
+        )
     df["isFraud"] = pd.to_numeric(df["isFraud"], errors="raise").astype(int)
     return df.sort_values("TransactionDT").reset_index(drop=True)
 
@@ -85,14 +96,24 @@ def model_scores(model: Any, df: pd.DataFrame, features: list[str]) -> np.ndarra
     return model.predict_proba(X)[:, 1]
 
 
-def behavioral_scores(df: pd.DataFrame, rule_engine: RuleEngine) -> tuple[np.ndarray, list[list[dict[str, Any]]]]:
+def behavioral_scores(
+    df: pd.DataFrame,
+    rule_engine: RuleEngine,
+) -> tuple[np.ndarray, list[list[dict[str, Any]]]]:
     scores = np.zeros(len(df), dtype=float)
     all_rules: list[list[dict[str, Any]]] = []
+
     for position, (_, row) in enumerate(df.iterrows()):
-        features = {key: row.get(key, 0) for key in (
-            "TransactionAmt", "card_txn_count_1h", "card_txn_count_24h",
-            "device_profile_unique_cards", "amount_vs_card_avg",
-        )}
+        features = {
+            key: row.get(key, 0)
+            for key in (
+                "TransactionAmt",
+                "card_txn_count_1h",
+                "card_txn_count_24h",
+                "device_profile_unique_cards",
+                "amount_vs_card_avg",
+            )
+        }
         cold_start = {
             "is_new_card": bool(row.get("new_card", 0)),
             "is_new_device": bool(row.get("new_device_profile", 0)),
@@ -116,41 +137,155 @@ def behavioral_scores(df: pd.DataFrame, rule_engine: RuleEngine) -> tuple[np.nda
         )
         scores[position] = float(result["behavioral_risk_score"])
         all_rules.append(result["rules_triggered"])
+
     return scores, all_rules
 
 
-def fit_calibrator(validation_scores: np.ndarray, y_validation: np.ndarray) -> IsotonicRegression:
+def fit_calibrator(
+    calibration_scores: np.ndarray,
+    y_calibration: np.ndarray,
+) -> IsotonicRegression:
     calibrator = IsotonicRegression(out_of_bounds="clip")
-    calibrator.fit(validation_scores, y_validation)
+    calibrator.fit(calibration_scores, y_calibration)
     return calibrator
 
 
-def choose_fusion_policy(y_validation: np.ndarray, calibrated_model_validation: np.ndarray, behavioral_validation: np.ndarray) -> dict[str, float]:
+def _review_metrics(
+    y_true: np.ndarray,
+    scores: np.ndarray,
+    review_rate: float = TARGET_REVIEW_RATE,
+) -> dict[str, float]:
+    n_review = max(1, int(np.ceil(len(scores) * review_rate)))
+    selected = np.argsort(-scores)[:n_review]
+    selected_labels = y_true[selected]
+    total_fraud = int(y_true.sum())
+    recall = float(selected_labels.sum() / total_fraud) if total_fraud else 0.0
+    precision = float(selected_labels.mean()) if len(selected_labels) else 0.0
+    return {
+        "review_rate": float(review_rate),
+        "recall": recall,
+        "precision": precision,
+        "review_count": float(n_review),
+    }
+
+
+def choose_fusion_policy(
+    y_policy: np.ndarray,
+    calibrated_model_policy: np.ndarray,
+    behavioral_policy: np.ndarray,
+) -> dict[str, float]:
+    """
+    Select the fusion policy on a strictly later temporal validation window.
+
+    The objective is intentionally based on analyst review capacity rather than
+    a free-running 0.5 threshold. This reduces threshold overfitting and aligns
+    tuning with how a fraud-review system is actually operated.
+    """
     best: dict[str, float] | None = None
+
+    baseline = _review_metrics(
+        y_policy,
+        calibrated_model_policy,
+        TARGET_REVIEW_RATE,
+    )
+
     for model_weight in WEIGHT_GRID:
         behavioral_weight = 1.0 - model_weight
-        fused = model_weight * calibrated_model_validation + behavioral_weight * behavioral_validation
-        for threshold in THRESHOLD_GRID:
-            review_rate = float((fused >= threshold).mean())
-            if review_rate > MAX_REVIEW_RATE or review_rate <= 0:
-                continue
-            metrics = classification_metrics(y_validation, fused, threshold=threshold)
-            candidate = {
-                "model_weight": float(model_weight),
-                "behavioral_weight": float(behavioral_weight),
-                "review_threshold": float(threshold),
-                "high_threshold": float(min(0.80, max(threshold + 0.15, 0.70))),
-                "validation_f1": float(metrics["F1_Score"]),
-                "validation_precision": float(metrics["Precision"]),
-                "validation_recall": float(metrics["Recall"]),
-                "validation_review_rate": review_rate,
-            }
-            if best is None or candidate["validation_f1"] > best["validation_f1"]:
+        fused = (
+            model_weight * calibrated_model_policy
+            + behavioral_weight * behavioral_policy
+        )
+        review = _review_metrics(y_policy, fused, TARGET_REVIEW_RATE)
+
+        # Convert the fixed-capacity ranking into a threshold that reproduces
+        # approximately the same review capacity on the policy period.
+        threshold = float(np.quantile(fused, 1.0 - TARGET_REVIEW_RATE))
+        metrics = classification_metrics(y_policy, fused, threshold=threshold)
+
+        # Prefer recall at the target review capacity, then precision, while
+        # retaining F1 as a secondary diagnostic rather than the main objective.
+        candidate = {
+            "model_weight": float(model_weight),
+            "behavioral_weight": float(behavioral_weight),
+            "review_threshold": threshold,
+            "high_threshold": float(min(0.95, max(threshold + 0.15, 0.70))),
+            "validation_f1": float(metrics["F1_Score"]),
+            "validation_precision": float(metrics["Precision"]),
+            "validation_recall": float(metrics["Recall"]),
+            "validation_review_rate": float((fused >= threshold).mean()),
+            "validation_recall_at_5pct": review["recall"],
+            "validation_precision_at_5pct": review["precision"],
+            "baseline_recall_at_5pct": baseline["recall"],
+            "baseline_precision_at_5pct": baseline["precision"],
+        }
+
+        candidate_key = (
+            candidate["validation_recall_at_5pct"],
+            candidate["validation_precision_at_5pct"],
+            candidate["validation_f1"],
+        )
+        if best is None:
+            best = candidate
+        else:
+            best_key = (
+                best["validation_recall_at_5pct"],
+                best["validation_precision_at_5pct"],
+                best["validation_f1"],
+            )
+            if candidate_key > best_key:
                 best = candidate
+
     return best or {
-        "model_weight": 0.80, "behavioral_weight": 0.20, "review_threshold": 0.50,
-        "high_threshold": 0.80, "validation_f1": 0.0,
-        "validation_precision": 0.0, "validation_recall": 0.0, "validation_review_rate": 0.0,
+        "model_weight": 1.0,
+        "behavioral_weight": 0.0,
+        "review_threshold": 0.5,
+        "high_threshold": 0.8,
+        "validation_f1": 0.0,
+        "validation_precision": 0.0,
+        "validation_recall": 0.0,
+        "validation_review_rate": 0.0,
+        "validation_recall_at_5pct": 0.0,
+        "validation_precision_at_5pct": 0.0,
+        "baseline_recall_at_5pct": 0.0,
+        "baseline_precision_at_5pct": 0.0,
+    }
+
+
+def stability_gate(
+    y_stability: np.ndarray,
+    calibrated_model_stability: np.ndarray,
+    behavioral_stability: np.ndarray,
+    policy: dict[str, float],
+) -> dict[str, Any]:
+    """Decide whether fusion generalizes to a later validation period."""
+    fused = (
+        policy["model_weight"] * calibrated_model_stability
+        + policy["behavioral_weight"] * behavioral_stability
+    )
+    baseline = _review_metrics(
+        y_stability,
+        calibrated_model_stability,
+        TARGET_REVIEW_RATE,
+    )
+    fusion = _review_metrics(y_stability, fused, TARGET_REVIEW_RATE)
+
+    recall_change = fusion["recall"] - baseline["recall"]
+    precision_change = fusion["precision"] - baseline["precision"]
+
+    # Require fusion to be no worse on recall and not materially worse on
+    # precision. If it fails, runtime falls back to the calibrated model.
+    enabled = bool(
+        recall_change >= 0.0
+        and precision_change >= -0.01
+    )
+
+    return {
+        "enabled": enabled,
+        "target_review_rate": TARGET_REVIEW_RATE,
+        "baseline": baseline,
+        "fusion": fusion,
+        "recall_change": float(recall_change),
+        "precision_change": float(precision_change),
     }
 
 
@@ -158,70 +293,185 @@ def evaluate() -> dict[str, Any]:
     print("\n========== FRAUD SYSTEM EVALUATION ==========")
     loaded = ModelLoader().load_all()
     model, features = loaded["model"], loaded["features"]
+
     df = load_feature_store()
     train_df, validation_df, test_df = time_based_split(df)
     validation = validation_df.reset_index(drop=True)
     test = test_df.reset_index(drop=True)
-    y_validation = validation["isFraud"].to_numpy(dtype=int)
     y_test = test["isFraud"].to_numpy(dtype=int)
+
+    # The validation period is split chronologically into three independent
+    # windows: calibration -> policy selection -> stability check.
+    n_validation = len(validation)
+    calibration_end = int(n_validation * 0.40)
+    policy_end = int(n_validation * 0.70)
+    calibration_df = validation.iloc[:calibration_end].reset_index(drop=True)
+    policy_df = validation.iloc[calibration_end:policy_end].reset_index(drop=True)
+    stability_df = validation.iloc[policy_end:].reset_index(drop=True)
 
     print(f"Total rows: {len(df):,}")
     print(f"Train rows: {len(train_df):,}")
     print(f"Validation rows: {len(validation):,}")
+    print(f"  Calibration window: {len(calibration_df):,}")
+    print(f"  Policy window:      {len(policy_df):,}")
+    print(f"  Stability window:   {len(stability_df):,}")
     print(f"Test rows: {len(test):,}")
 
     rule_engine = RuleEngine()
-    model_validation = model_scores(model, validation, features)
+    model_calibration = model_scores(model, calibration_df, features)
+    model_policy = model_scores(model, policy_df, features)
+    model_stability = model_scores(model, stability_df, features)
     model_test = model_scores(model, test, features)
-    behavioral_validation, _ = behavioral_scores(validation, rule_engine)
+
+    behavioral_calibration, _ = behavioral_scores(calibration_df, rule_engine)
+    behavioral_policy, _ = behavioral_scores(policy_df, rule_engine)
+    behavioral_stability, _ = behavioral_scores(stability_df, rule_engine)
     behavioral_test, test_rules = behavioral_scores(test, rule_engine)
 
-    calibrator = fit_calibrator(model_validation, y_validation)
-    calibrated_validation = np.clip(calibrator.predict(model_validation), 0.0, 1.0)
+    y_calibration = calibration_df["isFraud"].to_numpy(dtype=int)
+    y_policy = policy_df["isFraud"].to_numpy(dtype=int)
+    y_stability = stability_df["isFraud"].to_numpy(dtype=int)
+
+    # Calibration is fitted only on the earliest validation window. This is
+    # deliberately separated from both policy selection and final testing.
+    calibrator = fit_calibrator(model_calibration, y_calibration)
+    calibrated_policy = np.clip(calibrator.predict(model_policy), 0.0, 1.0)
+    calibrated_stability = np.clip(calibrator.predict(model_stability), 0.0, 1.0)
     calibrated_test = np.clip(calibrator.predict(model_test), 0.0, 1.0)
+
     CALIBRATOR_PATH.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(calibrator, CALIBRATOR_PATH)
 
-    policy = choose_fusion_policy(y_validation, calibrated_validation, behavioral_validation)
-    fusion_validation = policy["model_weight"] * calibrated_validation + policy["behavioral_weight"] * behavioral_validation
-    fusion_test = policy["model_weight"] * calibrated_test + policy["behavioral_weight"] * behavioral_test
-    FUSION_CONFIG_PATH.write_text(json.dumps(policy, indent=2), encoding="utf-8")
+    policy = choose_fusion_policy(
+        y_policy,
+        calibrated_policy,
+        behavioral_policy,
+    )
+    stability = stability_gate(
+        y_stability,
+        calibrated_stability,
+        behavioral_stability,
+        policy,
+    )
+
+    # Never deploy a fusion policy that fails its later stability window.
+    policy["enabled"] = bool(stability["enabled"])
+    if not policy["enabled"]:
+        policy["fallback_reason"] = (
+            "Fusion failed the later temporal stability gate; "
+            "runtime should use the calibrated model score."
+        )
+
+    fusion_test = (
+        policy["model_weight"] * calibrated_test
+        + policy["behavioral_weight"] * behavioral_test
+    )
+    if not policy["enabled"]:
+        fusion_test = calibrated_test.copy()
+
+    FUSION_CONFIG_PATH.write_text(
+        json.dumps(policy, indent=2),
+        encoding="utf-8",
+    )
 
     model_metrics = classification_metrics(y_test, model_test, threshold=0.5)
     model_metrics.update(operating_point_metrics(y_test, model_test))
     calibrated_metrics = classification_metrics(y_test, calibrated_test, threshold=0.5)
     calibrated_metrics.update(operating_point_metrics(y_test, calibrated_test))
     behavioral_metrics = classification_metrics(y_test, behavioral_test, threshold=0.5)
-    behavioral_metrics.update(operating_point_metrics(y_test, behavioral_test))
-    fusion_metrics = classification_metrics(y_test, fusion_test, threshold=policy["review_threshold"])
+
+    fusion_threshold = (
+        policy["review_threshold"] if policy["enabled"] else 0.5
+    )
+    fusion_metrics = classification_metrics(
+        y_test,
+        fusion_test,
+        threshold=fusion_threshold,
+    )
     fusion_metrics.update(operating_point_metrics(y_test, fusion_test))
 
     results: dict[str, Any] = {
-        "evaluation_type": "temporal_holdout",
-        "split": {"train": 0.70, "validation": 0.15, "test": 0.15},
+        "evaluation_type": "temporal_holdout_with_validation_stability_gate",
+        "split": {
+            "train": 0.70,
+            "validation": 0.15,
+            "test": 0.15,
+            "validation_windows": {
+                "calibration": 0.40,
+                "policy": 0.30,
+                "stability": 0.30,
+            },
+        },
         "test_rows": int(len(test)),
         "test_fraud_count": int(y_test.sum()),
         "test_fraud_rate": float(y_test.mean()),
         "model": model_metrics,
         "calibrated_model": calibrated_metrics,
         "behavioral_rules_only": behavioral_metrics,
-        "risk_fusion": {**fusion_metrics, **{k: policy[k] for k in ("model_weight", "behavioral_weight", "review_threshold", "high_threshold")}, "validation_policy": policy},
+        "risk_fusion": {
+            **fusion_metrics,
+            **{
+                k: policy[k]
+                for k in (
+                    "enabled",
+                    "model_weight",
+                    "behavioral_weight",
+                    "review_threshold",
+                    "high_threshold",
+                )
+            },
+            "validation_policy": policy,
+            "stability_gate": stability,
+        },
+        "validation_policy": policy,
+        "stability_gate": stability,
         "model_calibration": calibration_metrics(y_test, model_test),
         "calibrated_model_calibration": calibration_metrics(y_test, calibrated_test),
         "model_thresholds": threshold_analysis(y_test, model_test),
         "model_review_capacity": review_capacity_analysis(y_test, model_test),
         "fusion_thresholds": threshold_analysis(y_test, fusion_test),
         "fusion_review_capacity": review_capacity_analysis(y_test, fusion_test),
-        "cold_start_segments_model": segment_metrics(test, y_test, model_test, threshold=0.5),
-        "cold_start_segments_fusion": segment_metrics(test, y_test, fusion_test, threshold=policy["review_threshold"]),
-        "test_rule_trigger_rate": float(np.mean([bool(r) for r in test_rules])),
+        "cold_start_segments_model": segment_metrics(
+            test,
+            y_test,
+            model_test,
+            threshold=0.5,
+        ),
+        "cold_start_segments_fusion": segment_metrics(
+            test,
+            y_test,
+            fusion_test,
+            threshold=fusion_threshold,
+        ),
+        "test_rule_trigger_rate": float(
+            np.mean([bool(r) for r in test_rules])
+        ),
     }
 
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "system_evaluation.json").write_text(json.dumps(_json_safe(results), indent=2), encoding="utf-8")
-    pd.DataFrame(results["model_thresholds"]).to_csv(RESULTS_DIR / "threshold_analysis.csv", index=False)
-    pd.DataFrame(results["fusion_thresholds"]).to_csv(RESULTS_DIR / "fusion_threshold_analysis.csv", index=False)
-    (RESULTS_DIR / "cold_start_segments.json").write_text(json.dumps(_json_safe(results["cold_start_segments_fusion"]), indent=2), encoding="utf-8")
+    (RESULTS_DIR / "system_evaluation.json").write_text(
+        json.dumps(_json_safe(results), indent=2),
+        encoding="utf-8",
+    )
+    pd.DataFrame(results["model_thresholds"]).to_csv(
+        RESULTS_DIR / "threshold_analysis.csv",
+        index=False,
+    )
+    pd.DataFrame(results["fusion_thresholds"]).to_csv(
+        RESULTS_DIR / "fusion_threshold_analysis.csv",
+        index=False,
+    )
+    (RESULTS_DIR / "cold_start_segments.json").write_text(
+        json.dumps(
+            _json_safe(results["cold_start_segments_fusion"]),
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (RESULTS_DIR / "validation_stability.json").write_text(
+        json.dumps(_json_safe(stability), indent=2),
+        encoding="utf-8",
+    )
 
     print("\n========== MODEL ==========")
     print(json.dumps(_json_safe(model_metrics), indent=2))
@@ -229,20 +479,25 @@ def evaluate() -> dict[str, Any]:
     print(json.dumps(_json_safe(calibrated_metrics), indent=2))
     print("\n========== RULES ONLY ==========")
     print(json.dumps(_json_safe(behavioral_metrics), indent=2))
-    print("\n========== CALIBRATED MODEL + BEHAVIOR ==========")
-    print(json.dumps(_json_safe(fusion_metrics), indent=2))
-    print("\n========== SELECTED VALIDATION POLICY ==========")
+    print("\n========== SELECTED POLICY ==========")
     print(json.dumps(_json_safe(policy), indent=2))
+    print("\n========== LATE VALIDATION STABILITY GATE ==========")
+    print(json.dumps(_json_safe(stability), indent=2))
+    print("\n========== TEST: FINAL FUSION/FALLBACK ==========")
+    print(json.dumps(_json_safe(fusion_metrics), indent=2))
     print("\nArtifacts:")
     print(CALIBRATOR_PATH)
     print(FUSION_CONFIG_PATH)
     print(RESULTS_DIR / "system_evaluation.json")
+    print(RESULTS_DIR / "validation_stability.json")
     print("===============================================\n")
     return results
 
 
 def main() -> None:
-    argparse.ArgumentParser(description="Evaluate and tune fraud risk fusion.").parse_args()
+    argparse.ArgumentParser(
+        description="Evaluate fraud model, calibration, behavioral rules and stable risk fusion."
+    ).parse_args()
     evaluate()
 
 
