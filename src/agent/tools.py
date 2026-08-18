@@ -21,6 +21,7 @@ class FraudInvestigationTools:
         rule_engine: RuleEngine | None = None,
         decision_engine: DecisionEngine | None = None,
         risk_fusion: RiskFusion | None = None,
+        raw_transaction_columns: list[str] | None = None,
     ):
         self.transactions = transactions
         self.identity = identity
@@ -56,7 +57,11 @@ class FraudInvestigationTools:
         self.feature_builder = TransactionFeatureBuilder(
             historical_df=history,
             identity=self.identity,
-            raw_columns=self.transactions.columns.tolist(),
+            raw_columns=(
+                raw_transaction_columns
+                if raw_transaction_columns is not None
+                else self.transactions.columns.tolist()
+            ),
         )
 
         self.risk_engine = None
