@@ -20,7 +20,7 @@ from .threshold_analysis import review_capacity_analysis, threshold_analysis
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 FEATURE_STORE_PATH = PROJECT_ROOT / "data" / "feature_store.csv"
-TRANSACTION_PATH = PROJECT_ROOT / "data" / "train_transaction.csv"
+TRANSACTION_PATH = PROJECT_ROOT / "data" / "raw"/"train_transaction.csv"
 RESULTS_DIR = PROJECT_ROOT / "eval_results"
 
 

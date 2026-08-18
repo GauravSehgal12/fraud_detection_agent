@@ -36,12 +36,27 @@ async function investigateTransaction() {
     document.getElementById('feedbackStatus').className = "feedback-status";
 
     try {
+        let bodyPayload = { transaction_id: txId };
+        
+        // Simulate a new unseen JSON payload for ID 999999997 to trigger Cold Start logic
+        if (txId === 999999997) {
+            bodyPayload = { 
+                transaction: {
+                    "TransactionID": 999999997,
+                    "TransactionDT": 15000000,
+                    "TransactionAmt": 450.00,
+                    "card1": 999999,
+                    "DeviceInfo": "NewDeviceModelX"
+                }
+            };
+        }
+
         const response = await fetch('/api/v1/investigate', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ transaction_id: txId })
+            body: JSON.stringify(bodyPayload)
         });
 
         const data = await response.json();

@@ -10,9 +10,6 @@ class OutputGuardrail:
         risk_assessment: dict[str, Any]
     ) -> str:
 
-        # -----------------------------------------
-        # 1. Prevent unsupported fraud claims
-        # -----------------------------------------
 
         forbidden_phrases = [
             "definitely fraudulent",
@@ -33,9 +30,7 @@ class OutputGuardrail:
                     "unsupported fraud claim."
                 )
 
-        # -----------------------------------------
-        # 2. Verify risk score
-        # -----------------------------------------
+      
 
         expected_score = str(
             risk_assessment["risk_score"]
@@ -48,9 +43,7 @@ class OutputGuardrail:
                 "does not match Risk Engine."
             )
 
-        # -----------------------------------------
-        # 3. Verify risk level
-        # -----------------------------------------
+        
 
         expected_level = (
             risk_assessment["risk_level"]
@@ -63,9 +56,7 @@ class OutputGuardrail:
                 "does not match Risk Engine."
             )
 
-        # -----------------------------------------
-        # 4. Verify decision
-        # -----------------------------------------
+      
 
         expected_decision = (
             risk_assessment["decision"]
@@ -78,9 +69,7 @@ class OutputGuardrail:
                 "does not match Risk Engine."
             )
 
-        # -----------------------------------------
-        # 5. Block secrets
-        # -----------------------------------------
+     
 
         secret_patterns = [
             r"gsk_[A-Za-z0-9_-]+",

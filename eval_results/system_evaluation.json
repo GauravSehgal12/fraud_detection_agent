@@ -1,0 +1,326 @@
+{
+  "evaluation_type": "temporal_holdout",
+  "split": {
+    "train": 0.7,
+    "validation": 0.15,
+    "test": 0.15
+  },
+  "test_rows": 75294,
+  "test_fraud_count": 2603,
+  "test_fraud_rate": 0.03457114776741839,
+  "model": {
+    "ROC_AUC": 0.7746233744779403,
+    "PR_AUC": 0.17398925424636288,
+    "Precision": 0.13317297179094686,
+    "Recall": 0.4679216288897426,
+    "F1_Score": 0.2073367946208188,
+    "False_Positive_Rate": 0.10906439586743888,
+    "False_Negative_Rate": 0.5320783711102574,
+    "Confusion_Matrix": {
+      "TN": 64763,
+      "FP": 7928,
+      "FN": 1385,
+      "TP": 1218
+    },
+    "threshold": 0.5,
+    "Recall_at_1%_review": 0.09988474836726853,
+    "Precision_at_1%_review": 0.3452855245683931,
+    "Recall_at_5%_review": 0.3011909335382251,
+    "Precision_at_5%_review": 0.20823373173970783,
+    "Recall_at_10%_review": 0.43027276219746446,
+    "Precision_at_10%_review": 0.14873837981407703
+  },
+  "behavioral_rules_only": {
+    "ROC_AUC": 0.5919341440290944,
+    "PR_AUC": 0.04410763187097552,
+    "Precision": 0.0515886444820455,
+    "Recall": 0.527084133691894,
+    "F1_Score": 0.0939790396602507,
+    "False_Positive_Rate": 0.34698931091882074,
+    "False_Negative_Rate": 0.47291586630810606,
+    "Confusion_Matrix": {
+      "TN": 47468,
+      "FP": 25223,
+      "FN": 1231,
+      "TP": 1372
+    },
+    "threshold": 0.5,
+    "Recall_at_1%_review": 0.01536688436419516,
+    "Precision_at_1%_review": 0.05312084993359894,
+    "Recall_at_5%_review": 0.08874375720322704,
+    "Precision_at_5%_review": 0.06135458167330677,
+    "Recall_at_10%_review": 0.15520553207837112,
+    "Precision_at_10%_review": 0.053652058432934926
+  },
+  "model_plus_rules_decision": {
+    "ROC_AUC": 0.628629691419333,
+    "PR_AUC": 0.04898522454911457,
+    "Precision": 0.05803571428571429,
+    "Recall": 0.6142912024587015,
+    "F1_Score": 0.10605206433427292,
+    "False_Positive_Rate": 0.3570318196200355,
+    "False_Negative_Rate": 0.3857087975412985,
+    "Confusion_Matrix": {
+      "TN": 46738,
+      "FP": 25953,
+      "FN": 1004,
+      "TP": 1599
+    },
+    "threshold": 0.5
+  },
+  "model_calibration": {
+    "Brier_Score": 0.10457451120454693,
+    "calibration_curve": {
+      "mean_predicted_probability": [
+        0.03471346597781202,
+        0.0728882210568407,
+        0.10611765216682233,
+        0.14211903153009622,
+        0.1832763138366325,
+        0.23093701881634981,
+        0.2870660702545804,
+        0.35846367327162176,
+        0.46243586928455904,
+        0.6894795696732215
+      ],
+      "fraction_positive": [
+        0.005312084993359893,
+        0.009164563687076637,
+        0.009164563687076637,
+        0.015405046480743692,
+        0.017000929738345067,
+        0.022844999335901183,
+        0.029349269588313413,
+        0.03347058042236685,
+        0.05525302164962147,
+        0.14873837981407703
+      ]
+    }
+  },
+  "model_thresholds": [
+    {
+      "threshold": 0.1,
+      "precision": 0.04286010792860108,
+      "recall": 0.9519784863618901,
+      "f1": 0.08202717688144458,
+      "false_positive_rate": 0.7612771869970147,
+      "review_rate": 0.7678699497967966,
+      "TP": 2478.0,
+      "FP": 55338.0,
+      "FN": 125.0,
+      "TN": 17353.0
+    },
+    {
+      "threshold": 0.2,
+      "precision": 0.05694300518134715,
+      "recall": 0.844410295812524,
+      "f1": 0.1066912603451205,
+      "false_positive_rate": 0.5007772626597515,
+      "review_rate": 0.5126570510266423,
+      "TP": 2198.0,
+      "FP": 36402.0,
+      "FN": 405.0,
+      "TN": 36289.0
+    },
+    {
+      "threshold": 0.3,
+      "precision": 0.07482387237833023,
+      "recall": 0.7099500576258163,
+      "f1": 0.13537965642284167,
+      "false_positive_rate": 0.3143442792092556,
+      "review_rate": 0.3280208250325391,
+      "TP": 1848.0,
+      "FP": 22850.0,
+      "FN": 755.0,
+      "TN": 49841.0
+    },
+    {
+      "threshold": 0.4,
+      "precision": 0.1012865957726139,
+      "recall": 0.5927775643488282,
+      "f1": 0.17301115658462746,
+      "false_positive_rate": 0.18834518716209708,
+      "review_rate": 0.20232687863574786,
+      "TP": 1543.0,
+      "FP": 13691.0,
+      "FN": 1060.0,
+      "TN": 59000.0
+    },
+    {
+      "threshold": 0.5,
+      "precision": 0.13317297179094686,
+      "recall": 0.4679216288897426,
+      "f1": 0.2073367946208188,
+      "false_positive_rate": 0.10906439586743888,
+      "review_rate": 0.12147050229765984,
+      "TP": 1218.0,
+      "FP": 7928.0,
+      "FN": 1385.0,
+      "TN": 64763.0
+    },
+    {
+      "threshold": 0.6,
+      "precision": 0.17649219467401286,
+      "recall": 0.3691893968497887,
+      "f1": 0.23881709741550697,
+      "false_positive_rate": 0.06168576577568062,
+      "review_rate": 0.07231651924456133,
+      "TP": 961.0,
+      "FP": 4484.0,
+      "FN": 1642.0,
+      "TN": 68207.0
+    },
+    {
+      "threshold": 0.7,
+      "precision": 0.22608418367346939,
+      "recall": 0.2723780253553592,
+      "f1": 0.24708137306150899,
+      "false_positive_rate": 0.03338790221623034,
+      "review_rate": 0.04165006507822668,
+      "TP": 709.0,
+      "FP": 2427.0,
+      "FN": 1894.0,
+      "TN": 70264.0
+    },
+    {
+      "threshold": 0.8,
+      "precision": 0.2961974649766511,
+      "recall": 0.17057241644256627,
+      "f1": 0.21647976596782056,
+      "false_positive_rate": 0.014513488602440467,
+      "review_rate": 0.01990862485722634,
+      "TP": 444.0,
+      "FP": 1055.0,
+      "FN": 2159.0,
+      "TN": 71636.0
+    },
+    {
+      "threshold": 0.9,
+      "precision": 0.4233983286908078,
+      "recall": 0.058394160583941604,
+      "f1": 0.10263335584064821,
+      "false_positive_rate": 0.0028476702755499306,
+      "review_rate": 0.004767976199962812,
+      "TP": 152.0,
+      "FP": 207.0,
+      "FN": 2451.0,
+      "TN": 72484.0
+    }
+  ],
+  "model_review_capacity": [
+    {
+      "review_rate": 0.01,
+      "review_count": 753.0,
+      "recall": 0.09988474836726853,
+      "precision": 0.3452855245683931
+    },
+    {
+      "review_rate": 0.05,
+      "review_count": 3765.0,
+      "recall": 0.3011909335382251,
+      "precision": 0.20823373173970783
+    },
+    {
+      "review_rate": 0.1,
+      "review_count": 7530.0,
+      "recall": 0.43027276219746446,
+      "precision": 0.14873837981407703
+    }
+  ],
+  "cold_start_segments": {
+    "existing_card_existing_device": {
+      "ROC_AUC": 0.7763313266525308,
+      "PR_AUC": 0.17446999491852755,
+      "Precision": 0.13238042880703682,
+      "Recall": 0.46994535519125685,
+      "F1_Score": 0.2065711589602814,
+      "False_Positive_Rate": 0.1095257262620234,
+      "False_Negative_Rate": 0.5300546448087432,
+      "Confusion_Matrix": {
+        "TN": 64156,
+        "FP": 7891,
+        "FN": 1358,
+        "TP": 1204
+      },
+      "threshold": 0.5,
+      "Recall_at_1%_review": 0.10070257611241218,
+      "Precision_at_1%_review": 0.3453815261044177,
+      "Recall_at_5%_review": 0.30210772833723654,
+      "Precision_at_5%_review": 0.207451085499866,
+      "Recall_at_10%_review": 0.4309133489461358,
+      "Precision_at_10%_review": 0.14796944109368718,
+      "count": 74609
+    },
+    "existing_card_new_device": {
+      "ROC_AUC": 0.8038834951456312,
+      "PR_AUC": 0.2768421052631579,
+      "Precision": 0.21875,
+      "Recall": 0.7,
+      "F1_Score": 0.3333333333333333,
+      "False_Positive_Rate": 0.24271844660194175,
+      "False_Negative_Rate": 0.3,
+      "Confusion_Matrix": {
+        "TN": 78,
+        "FP": 25,
+        "FN": 3,
+        "TP": 7
+      },
+      "threshold": 0.5,
+      "Recall_at_1%_review": 0.0,
+      "Precision_at_1%_review": 0.0,
+      "Recall_at_5%_review": 0.1,
+      "Precision_at_5%_review": 0.16666666666666666,
+      "Recall_at_10%_review": 0.3,
+      "Precision_at_10%_review": 0.25,
+      "count": 113
+    },
+    "new_card_existing_device": {
+      "ROC_AUC": 0.8123524783634933,
+      "PR_AUC": 0.2778664986980097,
+      "Precision": 0.3684210526315789,
+      "Recall": 0.22580645161290322,
+      "F1_Score": 0.28,
+      "False_Positive_Rate": 0.0225140712945591,
+      "False_Negative_Rate": 0.7741935483870968,
+      "Confusion_Matrix": {
+        "TN": 521,
+        "FP": 12,
+        "FN": 24,
+        "TP": 7
+      },
+      "threshold": 0.5,
+      "Recall_at_1%_review": 0.0967741935483871,
+      "Precision_at_1%_review": 0.5,
+      "Recall_at_5%_review": 0.3548387096774194,
+      "Precision_at_5%_review": 0.3793103448275862,
+      "Recall_at_10%_review": 0.41935483870967744,
+      "Precision_at_10%_review": 0.22807017543859648,
+      "count": 564
+    },
+    "new_card_new_device": {
+      "ROC_AUC": NaN,
+      "PR_AUC": 0.0,
+      "Precision": 0.0,
+      "Recall": 0.0,
+      "F1_Score": 0.0,
+      "False_Positive_Rate": 0.0,
+      "False_Negative_Rate": 0.0,
+      "Confusion_Matrix": {
+        "TN": 8,
+        "FP": 0,
+        "FN": 0,
+        "TP": 0
+      },
+      "threshold": 0.5,
+      "Recall_at_1%_review": 0.0,
+      "Precision_at_1%_review": 0.0,
+      "Recall_at_5%_review": 0.0,
+      "Precision_at_5%_review": 0.0,
+      "Recall_at_10%_review": 0.0,
+      "Precision_at_10%_review": 0.0,
+      "count": 8
+    }
+  },
+  "decision_review_rate": 0.3659255717587059,
+  "rule_trigger_rate": 0.3659255717587059
+}
