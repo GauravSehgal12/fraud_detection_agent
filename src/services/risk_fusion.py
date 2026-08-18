@@ -20,7 +20,7 @@ DEFAULT_CALIBRATOR_PATH = PROJECT_ROOT / "models" / "isotonic_calibrator.joblib"
 
 
 class RiskFusion:
-    """Combine calibrated model risk with deterministic behavioral risk."""
+    """Combine calibrated model risk with behavioral risk when the policy passes validation."""
 
     def __init__(
         self,
@@ -33,6 +33,8 @@ class RiskFusion:
         self.behavioral_weight = float(settings.FUSION_BEHAVIORAL_WEIGHT)
         self.review_threshold = float(settings.FUSION_REVIEW_THRESHOLD)
         self.high_threshold = float(settings.FUSION_HIGH_THRESHOLD)
+        self.enabled = True
+        self.fallback_reason = None
         self.calibrator = None
         self.calibration_available = False
         self._load_config()
@@ -47,15 +49,23 @@ class RiskFusion:
                 self.behavioral_weight = float(config.get("behavioral_weight", self.behavioral_weight))
                 self.review_threshold = float(config.get("review_threshold", self.review_threshold))
                 self.high_threshold = float(config.get("high_threshold", self.high_threshold))
+                self.enabled = bool(config.get("enabled", True))
+                self.fallback_reason = config.get("fallback_reason")
             except (OSError, ValueError, TypeError):
                 pass
 
         total = self.model_weight + self.behavioral_weight
         if total <= 0:
-            self.model_weight, self.behavioral_weight = 0.80, 0.20
+            self.model_weight, self.behavioral_weight = 1.0, 0.0
         else:
             self.model_weight /= total
             self.behavioral_weight /= total
+
+        # If validation rejected fusion, runtime must use the calibrated model
+        # instead of silently applying the stale behavioral policy.
+        if not self.enabled:
+            self.model_weight = 1.0
+            self.behavioral_weight = 0.0
 
     def _load_calibrator(self) -> None:
         if joblib is None or not self.calibrator_path.exists():
@@ -105,5 +115,7 @@ class RiskFusion:
             "behavioral_weight": round(self.behavioral_weight, 6),
             "review_threshold": round(self.review_threshold, 6),
             "high_threshold": round(self.high_threshold, 6),
+            "fusion_enabled": self.enabled,
+            "fallback_reason": self.fallback_reason,
             "calibration_available": self.calibration_available,
         }
