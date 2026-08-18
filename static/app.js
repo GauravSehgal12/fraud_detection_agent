@@ -71,15 +71,20 @@ function renderDashboard(data) {
     decisionValue.className = 'decision-value';
     
     decisionValue.textContent = data.final_decision;
+    const decisionBadge = document.getElementById('decisionBadge');
+
     if (data.final_decision === 'APPROVE') {
         decisionCard.classList.add('bg-approve');
         decisionValue.classList.add('status-approve');
+        decisionBadge.textContent = "Low Risk";
     } else if (data.final_decision === 'REVIEW') {
         decisionCard.classList.add('bg-review');
         decisionValue.classList.add('status-review');
+        decisionBadge.textContent = "Medium Risk";
     } else {
         decisionCard.classList.add('bg-decline');
         decisionValue.classList.add('status-decline');
+        decisionBadge.textContent = "High Risk";
     }
 
     // 2. Risk Scores
