@@ -10,5 +10,15 @@
     "analyst_label": "CONFIRMED_FRAUD",
     "analyst_comment": "Unauthorized card usage confirmed",
     "timestamp": "2026-08-18T04:46:50.850248+00:00"
+  },
+  {
+    "transaction_id": 3409570,
+    "analyst_label": "CONFIRMED_FRAUD",
+    "analyst_comment": "Unauthorized card usage confirmed",
+    "model_score": null,
+    "behavioral_score": null,
+    "final_decision": null,
+    "model_version": "1.0.0",
+    "timestamp": "2026-08-18T05:00:10.195955+00:00"
   }
 ]

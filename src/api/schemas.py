@@ -56,6 +56,10 @@ class FeedbackRequest(BaseModel):
         default=None,
         description="Analyst comment",
     )
+    model_score: float | None = Field(default=None, description="Model risk score")
+    behavioral_score: float | None = Field(default=None, description="Behavioral risk score")
+    final_decision: str | None = Field(default=None, description="Final deterministic decision")
+    model_version: str | None = Field(default="1.0.0", description="Model version")
 
 
 class FeedbackResponse(BaseModel):

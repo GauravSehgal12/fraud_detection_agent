@@ -156,6 +156,10 @@ def record_feedback(transaction_id: int, feedback: FeedbackRequest):
         "transaction_id": transaction_id,
         "analyst_label": feedback.label,
         "analyst_comment": feedback.analyst_comment,
+        "model_score": feedback.model_score,
+        "behavioral_score": feedback.behavioral_score,
+        "final_decision": feedback.final_decision,
+        "model_version": feedback.model_version,
         "timestamp": timestamp_str,
     }
 

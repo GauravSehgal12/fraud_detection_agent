@@ -1,0 +1,20 @@
+{
+    "ROC_AUC": 0.7756631722741715,
+    "PR_AUC": 0.174708062260716,
+    "Precision": 0.41578947368421054,
+    "Recall": 0.06069919323857088,
+    "F1_Score": 0.10593362386858866,
+    "False_Positive_Rate": 0.0030540231940680415,
+    "False_Negative_Rate": 0.9393008067614291,
+    "Confusion_Matrix": {
+        "TN": 72469,
+        "FP": 222,
+        "FN": 2445,
+        "TP": 158
+    },
+    "Recall_at_1%_review": 0.10142143680368805,
+    "Recall_at_5%_review": 0.304648482520169,
+    "Recall_at_10%_review": 0.4310411064156742,
+    "Brier_Score_Uncalibrated": 0.1048979009239982,
+    "Brier_Score_Calibrated": 0.0313835127352511
+}
