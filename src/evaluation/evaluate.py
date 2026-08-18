@@ -163,10 +163,30 @@ def choose_fusion_policy(y_policy: np.ndarray, calibrated_model_policy: np.ndarr
     best: dict[str, float] | None = None
     for model_weight in WEIGHT_GRID:
         behavioral_weight = 1.0 - model_weight
-        fused = model_weight * calibrated_model + behavioral_weight * behavioral
-        review = _review_metrics(y, fused, TARGET_REVIEW_RATE)
-        threshold = float(np.quantile(fused, 1.0 - TARGET_REVIEW_RATE))
-        metrics = classification_metrics(y, fused, threshold=threshold)
+
+        fused = (
+        model_weight * calibrated_model_policy
+        + behavioral_weight * behavioral_policy
+    )
+
+        review = _review_metrics(
+        y_policy,
+        fused,
+        TARGET_REVIEW_RATE,
+    )
+
+        threshold = float(
+        np.quantile(
+            fused,
+            1.0 - TARGET_REVIEW_RATE,
+        )
+    )
+
+        metrics = classification_metrics(
+        y_policy,
+        fused,
+        threshold=threshold,
+    )
 
         candidate = {
             "model_weight": float(model_weight),

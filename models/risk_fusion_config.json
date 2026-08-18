@@ -10,5 +10,7 @@
   "validation_recall_at_5pct": 0.5227272727272727,
   "validation_precision_at_5pct": 0.44778761061946903,
   "enabled": false,
-  "fallback_reason": "Fusion failed the later temporal stability gate; runtime uses calibrated model score."
+  "fallback_reason": "Fusion failed the later temporal stability gate; runtime uses calibrated model score.",
+  "calibrated_model_review_threshold": 0.23529411852359772,
+  "production_review_rate": 0.05
 }
