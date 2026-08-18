@@ -1,0 +1,18 @@
+{
+  "enabled": true,
+  "target_review_rate": 0.05,
+  "baseline": {
+    "review_rate": 0.05,
+    "recall": 0.5279805352798054,
+    "precision": 0.384070796460177,
+    "review_count": 1130.0
+  },
+  "fusion": {
+    "review_rate": 0.05,
+    "recall": 0.5279805352798054,
+    "precision": 0.384070796460177,
+    "review_count": 1130.0
+  },
+  "recall_change": 0.0,
+  "precision_change": 0.0
+}

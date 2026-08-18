@@ -173,7 +173,7 @@ def choose_fusion_policy(
     y_policy: np.ndarray,
     calibrated_model_policy: np.ndarray,
     behavioral_policy: np.ndarray,
-) -> dict[str, float]:
+) -> dict[str, Any]:
     """
     Select the fusion policy on a strictly later temporal validation window.
 
@@ -181,7 +181,7 @@ def choose_fusion_policy(
     a free-running 0.5 threshold. This reduces threshold overfitting and aligns
     tuning with how a fraud-review system is actually operated.
     """
-    best: dict[str, float] | None = None
+    best: dict[str, Any] | None = None
 
     baseline = _review_metrics(
         y_policy,

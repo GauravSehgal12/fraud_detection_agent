@@ -1,10 +1,15 @@
 {
-  "model_weight": 0.95,
-  "behavioral_weight": 0.050000000000000044,
-  "review_threshold": 0.3,
+  "model_weight": 1.0,
+  "behavioral_weight": 0.0,
+  "review_threshold": 0.27009645104408264,
   "high_threshold": 0.7,
-  "validation_f1": 0.5019448672416709,
-  "validation_precision": 0.5256818986893376,
-  "validation_recall": 0.4802588996763754,
-  "validation_review_rate": 0.03749302733285521
+  "validation_f1": 0.5728727885425442,
+  "validation_precision": 0.5392545598731165,
+  "validation_recall": 0.6109613656783468,
+  "validation_review_rate": 0.055826102355232866,
+  "validation_recall_at_5pct": 0.5804132973944295,
+  "validation_precision_at_5pct": 0.5716814159292035,
+  "baseline_recall_at_5pct": 0.5804132973944295,
+  "baseline_precision_at_5pct": 0.5716814159292035,
+  "enabled": true
 }
