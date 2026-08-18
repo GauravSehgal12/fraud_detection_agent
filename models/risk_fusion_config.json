@@ -1,15 +1,14 @@
 {
-  "model_weight": 1.0,
-  "behavioral_weight": 0.0,
-  "review_threshold": 0.27009645104408264,
+  "model_weight": 0.9,
+  "behavioral_weight": 0.09999999999999998,
+  "review_threshold": 0.261764720082283,
   "high_threshold": 0.7,
-  "validation_f1": 0.5728727885425442,
-  "validation_precision": 0.5392545598731165,
-  "validation_recall": 0.6109613656783468,
-  "validation_review_rate": 0.055826102355232866,
-  "validation_recall_at_5pct": 0.5804132973944295,
-  "validation_precision_at_5pct": 0.5716814159292035,
-  "baseline_recall_at_5pct": 0.5804132973944295,
-  "baseline_precision_at_5pct": 0.5716814159292035,
-  "enabled": true
+  "validation_f1": 0.4839319470699433,
+  "validation_precision": 0.445993031358885,
+  "validation_recall": 0.5289256198347108,
+  "validation_review_rate": 0.05082344607756331,
+  "validation_recall_at_5pct": 0.5227272727272727,
+  "validation_precision_at_5pct": 0.44778761061946903,
+  "enabled": false,
+  "fallback_reason": "Fusion failed the later temporal stability gate; runtime uses calibrated model score."
 }
