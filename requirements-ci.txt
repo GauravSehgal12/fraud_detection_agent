@@ -5,4 +5,5 @@ scikit-learn==1.7.1
 xgboost==3.0.4
 imbalanced-learn==0.14.0
 joblib==1.5.1
+pydantic-settings
 pytest
