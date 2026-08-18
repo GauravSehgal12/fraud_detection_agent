@@ -5,11 +5,11 @@ ROOT = Path(__file__).resolve().parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-import pytest
 from src.services.rule_engine import RuleEngine
 
 
-def test_rule_engine_new_card_new_device_high_amount():
+def test_rule_engine_new_card_new_device_high_amount_is_medium():
+    """Cold-start + high amount is a contextual medium signal, not automatic HIGH risk."""
     engine = RuleEngine(high_amount_threshold=500.0)
 
     result = engine.evaluate(
@@ -25,8 +25,8 @@ def test_rule_engine_new_card_new_device_high_amount():
 
     triggered_ids = [r["rule_id"] for r in result["rules_triggered"]]
     assert "NEW_CARD_NEW_DEVICE_HIGH_AMOUNT" in triggered_ids
-    assert result["behavioral_risk_level"] == "HIGH"
-    assert result["behavioral_risk_score"] >= 0.85
+    assert result["behavioral_risk_level"] == "MEDIUM"
+    assert result["behavioral_risk_score"] == 0.50
 
 
 def test_rule_engine_high_model_risk():
