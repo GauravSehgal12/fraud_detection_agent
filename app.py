@@ -18,9 +18,6 @@ container = AppContainer()
 async def lifespan(app: FastAPI):
     print("Starting Financial Fraud Risk API...")
 
-    # =====================================================
-    # 1. LOAD MODEL AND DATA & INITIALIZE SERVICES
-    # =====================================================
     container.load_all()
 
     features = container.features
@@ -30,14 +27,12 @@ async def lifespan(app: FastAPI):
     investigation_history = container.investigation_history
     risk_assessments = container.risk_assessments
 
-    # =====================================================
-    # 2. STARTUP INFORMATION
-    # =====================================================
     print("\n========== APPLICATION DATA ==========")
     print(f"Model features: {len(features)}")
-    print(f"Raw transactions: {raw_transactions.shape[0]} x {raw_transactions.shape[1]}")
+    print(f"Compact historical transactions: {raw_transactions.shape[0]} x {raw_transactions.shape[1]}")
     print(f"Identity: {identity.shape[0]} x {identity.shape[1]}")
-    print(f"Merged: {transactions.shape[0]} x {transactions.shape[1]}")
+    print(f"Runtime transactions: {transactions.shape[0]} x {transactions.shape[1]}")
+    print(f"Original transaction schema: {len(container.raw_transaction_columns)} columns")
     print(f"Investigation history loaded: {len(investigation_history)} rows")
     print(f"Risk assessments loaded: {len(risk_assessments)}")
     print("Cold-start detector initialized")
@@ -45,9 +40,6 @@ async def lifespan(app: FastAPI):
     print("Decision engine initialized")
     print("======================================\n")
 
-    # =====================================================
-    # 3. CREATE INVESTIGATION TOOLS
-    # =====================================================
     tools = FraudInvestigationTools(
         transactions=raw_transactions,
         identity=identity,
@@ -56,12 +48,10 @@ async def lifespan(app: FastAPI):
         cold_start_detector=container.cold_start_detector,
         rule_engine=container.rule_engine,
         decision_engine=container.decision_engine,
+        raw_transaction_columns=container.raw_transaction_columns,
     )
     print("Investigation tools initialized.")
 
-    # =====================================================
-    # 4. CREATE LLM & AGENT
-    # =====================================================
     llm = FraudLLM()
     print(f"LLM initialized: {llm.model}")
 
@@ -71,9 +61,6 @@ async def lifespan(app: FastAPI):
     )
     print("Fraud Investigation Agent initialized")
 
-    # =====================================================
-    # 5. REGISTER AGENT
-    # =====================================================
     set_agent(agent)
     container.agent = agent
 
@@ -81,9 +68,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # =====================================================
-    # SHUTDOWN
-    # =====================================================
     print("Shutting down Financial Fraud Risk API...")
 
 
