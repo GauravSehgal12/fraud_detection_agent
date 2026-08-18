@@ -1,0 +1,33 @@
+{
+  "production_policy": "calibrated_model_fallback",
+  "target_review_rate": 0.05,
+  "actual_review_rate": 0.050003984381225594,
+  "review_count": 3765,
+  "precision_at_production_capacity": 0.2090305444887118,
+  "recall_at_production_capacity": 0.30234344986553974,
+  "reporting_cutoff": 0.08214285969734192,
+  "threshold_metrics_comparison": {
+    "ROC_AUC": 0.7702894188338132,
+    "PR_AUC": 0.160124661916611,
+    "Precision": 0.187434554973822,
+    "Recall": 0.3438340376488667,
+    "F1_Score": 0.24261317430197885,
+    "False_Positive_Rate": 0.05337662159001802,
+    "False_Negative_Rate": 0.6561659623511333,
+    "Confusion_Matrix": {
+      "TN": 68811,
+      "FP": 3880,
+      "FN": 1708,
+      "TP": 895
+    },
+    "threshold": 0.08214285969734192,
+    "Recall_at_1%_review": 0.10026892047637341,
+    "Precision_at_1%_review": 0.3466135458167331,
+    "Recall_at_5%_review": 0.3054168267383788,
+    "Precision_at_5%_review": 0.21115537848605578,
+    "Recall_at_10%_review": 0.42873607376104494,
+    "Precision_at_10%_review": 0.14820717131474104
+  },
+  "test_rows": 75294,
+  "test_frauds": 2603
+}
