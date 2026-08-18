@@ -1,0 +1,10 @@
+{
+  "model_weight": 0.95,
+  "behavioral_weight": 0.050000000000000044,
+  "review_threshold": 0.3,
+  "high_threshold": 0.7,
+  "validation_f1": 0.5019448672416709,
+  "validation_precision": 0.5256818986893376,
+  "validation_recall": 0.4802588996763754,
+  "validation_review_rate": 0.03749302733285521
+}
