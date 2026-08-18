@@ -1,6 +1,8 @@
 from contextlib import asynccontextmanager
 
+# pyrefly: ignore [missing-import]
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from src.agent.tools import FraudInvestigationTools
 from src.agent.llm import FraudLLM
@@ -96,6 +98,8 @@ app.include_router(
     router,
     prefix="/api/v1",
 )
+
+app.mount("/dashboard", StaticFiles(directory="static", html=True), name="static")
 
 
 @app.get("/")
