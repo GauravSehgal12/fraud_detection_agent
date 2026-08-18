@@ -1,0 +1,615 @@
+{
+  "policy": {
+    "model_weight": 0.9,
+    "behavioral_weight": 0.09999999999999998,
+    "review_threshold": 0.261764720082283,
+    "high_threshold": 0.7,
+    "validation_f1": 0.4839319470699433,
+    "validation_precision": 0.445993031358885,
+    "validation_recall": 0.5289256198347108,
+    "validation_review_rate": 0.05082344607756331,
+    "validation_recall_at_5pct": 0.5227272727272727,
+    "validation_precision_at_5pct": 0.44778761061946903
+  },
+  "stability_window": {
+    "rows": 52706,
+    "frauds": 2241,
+    "fraud_rate": 0.04251887830607521
+  },
+  "overall": {
+    "baseline": {
+      "rows": 52706,
+      "frauds": 2241,
+      "fraud_rate": 0.04251887830607521,
+      "recall_at_5pct": 0.5408299866131191,
+      "precision_at_5pct": 0.4597875569044006,
+      "review_count": 2636
+    },
+    "fusion": {
+      "rows": 52706,
+      "frauds": 2241,
+      "fraud_rate": 0.04251887830607521,
+      "recall_at_5pct": 0.5408299866131191,
+      "precision_at_5pct": 0.4597875569044006,
+      "review_count": 2636
+    }
+  },
+  "segments": [
+    {
+      "segment": "all",
+      "baseline": {
+        "rows": 52706,
+        "frauds": 2241,
+        "fraud_rate": 0.04251887830607521,
+        "recall_at_5pct": 0.5408299866131191,
+        "precision_at_5pct": 0.4597875569044006,
+        "review_count": 2636
+      },
+      "fusion": {
+        "rows": 52706,
+        "frauds": 2241,
+        "fraud_rate": 0.04251887830607521,
+        "recall_at_5pct": 0.5408299866131191,
+        "precision_at_5pct": 0.4597875569044006,
+        "review_count": 2636
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "new_card",
+      "baseline": {
+        "rows": 430,
+        "frauds": 15,
+        "fraud_rate": 0.03488372093023256,
+        "recall_at_5pct": 0.3333333333333333,
+        "precision_at_5pct": 0.22727272727272727,
+        "review_count": 22
+      },
+      "fusion": {
+        "rows": 430,
+        "frauds": 15,
+        "fraud_rate": 0.03488372093023256,
+        "recall_at_5pct": 0.3333333333333333,
+        "precision_at_5pct": 0.22727272727272727,
+        "review_count": 22
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "known_card",
+      "baseline": {
+        "rows": 52276,
+        "frauds": 2226,
+        "fraud_rate": 0.04258168184252812,
+        "recall_at_5pct": 0.5435759209344115,
+        "precision_at_5pct": 0.4628921193573068,
+        "review_count": 2614
+      },
+      "fusion": {
+        "rows": 52276,
+        "frauds": 2226,
+        "fraud_rate": 0.04258168184252812,
+        "recall_at_5pct": 0.5435759209344115,
+        "precision_at_5pct": 0.4628921193573068,
+        "review_count": 2614
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "new_device",
+      "baseline": {
+        "rows": 79,
+        "frauds": 8,
+        "fraud_rate": 0.10126582278481013,
+        "recall_at_5pct": 0.5,
+        "precision_at_5pct": 1.0,
+        "review_count": 4
+      },
+      "fusion": {
+        "rows": 79,
+        "frauds": 8,
+        "fraud_rate": 0.10126582278481013,
+        "recall_at_5pct": 0.5,
+        "precision_at_5pct": 1.0,
+        "review_count": 4
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "known_device",
+      "baseline": {
+        "rows": 52627,
+        "frauds": 2233,
+        "fraud_rate": 0.042430691470157905,
+        "recall_at_5pct": 0.541871921182266,
+        "precision_at_5pct": 0.45972644376899696,
+        "review_count": 2632
+      },
+      "fusion": {
+        "rows": 52627,
+        "frauds": 2233,
+        "fraud_rate": 0.042430691470157905,
+        "recall_at_5pct": 0.5405284370801612,
+        "precision_at_5pct": 0.45858662613981765,
+        "review_count": 2632
+      },
+      "delta_recall": -0.0013434841021048305,
+      "delta_precision": -0.0011398176291793072
+    },
+    {
+      "segment": "new_card_and_new_device",
+      "baseline": {
+        "rows": 4,
+        "frauds": 0,
+        "fraud_rate": 0.0,
+        "recall_at_5pct": 0.0,
+        "precision_at_5pct": 0.0,
+        "review_count": 1
+      },
+      "fusion": {
+        "rows": 4,
+        "frauds": 0,
+        "fraud_rate": 0.0,
+        "recall_at_5pct": 0.0,
+        "precision_at_5pct": 0.0,
+        "review_count": 1
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "known_card_new_device",
+      "baseline": {
+        "rows": 75,
+        "frauds": 8,
+        "fraud_rate": 0.10666666666666667,
+        "recall_at_5pct": 0.5,
+        "precision_at_5pct": 1.0,
+        "review_count": 4
+      },
+      "fusion": {
+        "rows": 75,
+        "frauds": 8,
+        "fraud_rate": 0.10666666666666667,
+        "recall_at_5pct": 0.5,
+        "precision_at_5pct": 1.0,
+        "review_count": 4
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "new_card_known_device",
+      "baseline": {
+        "rows": 426,
+        "frauds": 15,
+        "fraud_rate": 0.035211267605633804,
+        "recall_at_5pct": 0.3333333333333333,
+        "precision_at_5pct": 0.22727272727272727,
+        "review_count": 22
+      },
+      "fusion": {
+        "rows": 426,
+        "frauds": 15,
+        "fraud_rate": 0.035211267605633804,
+        "recall_at_5pct": 0.3333333333333333,
+        "precision_at_5pct": 0.22727272727272727,
+        "review_count": 22
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "new_card_device_pair",
+      "baseline": {
+        "rows": 45967,
+        "frauds": 1482,
+        "fraud_rate": 0.032240520373311286,
+        "recall_at_5pct": 0.524966261808367,
+        "precision_at_5pct": 0.3384080034797738,
+        "review_count": 2299
+      },
+      "fusion": {
+        "rows": 45967,
+        "frauds": 1482,
+        "fraud_rate": 0.032240520373311286,
+        "recall_at_5pct": 0.5148448043184886,
+        "precision_at_5pct": 0.33188342757720746,
+        "review_count": 2299
+      },
+      "delta_recall": -0.010121457489878471,
+      "delta_precision": -0.006524575902566332
+    },
+    {
+      "segment": "known_card_device_pair",
+      "baseline": {
+        "rows": 6739,
+        "frauds": 759,
+        "fraud_rate": 0.11262798634812286,
+        "recall_at_5pct": 0.3702239789196311,
+        "precision_at_5pct": 0.8338278931750742,
+        "review_count": 337
+      },
+      "fusion": {
+        "rows": 6739,
+        "frauds": 759,
+        "fraud_rate": 0.11262798634812286,
+        "recall_at_5pct": 0.37417654808959155,
+        "precision_at_5pct": 0.8427299703264095,
+        "review_count": 337
+      },
+      "delta_recall": 0.0039525691699604515,
+      "delta_precision": 0.008902077151335286
+    },
+    {
+      "segment": "high_amount_gt_200",
+      "baseline": {
+        "rows": 8510,
+        "frauds": 452,
+        "fraud_rate": 0.053113983548766154,
+        "recall_at_5pct": 0.5199115044247787,
+        "precision_at_5pct": 0.5516431924882629,
+        "review_count": 426
+      },
+      "fusion": {
+        "rows": 8510,
+        "frauds": 452,
+        "fraud_rate": 0.053113983548766154,
+        "recall_at_5pct": 0.504424778761062,
+        "precision_at_5pct": 0.5352112676056338,
+        "review_count": 426
+      },
+      "delta_recall": -0.015486725663716783,
+      "delta_precision": -0.016431924882629123
+    },
+    {
+      "segment": "high_amount_gt_500",
+      "baseline": {
+        "rows": 2003,
+        "frauds": 168,
+        "fraud_rate": 0.08387418871692462,
+        "recall_at_5pct": 0.5,
+        "precision_at_5pct": 0.8316831683168316,
+        "review_count": 101
+      },
+      "fusion": {
+        "rows": 2003,
+        "frauds": 168,
+        "fraud_rate": 0.08387418871692462,
+        "recall_at_5pct": 0.5059523809523809,
+        "precision_at_5pct": 0.8415841584158416,
+        "review_count": 101
+      },
+      "delta_recall": 0.005952380952380931,
+      "delta_precision": 0.00990099009900991
+    },
+    {
+      "segment": "amount_gt_2x_card_avg",
+      "baseline": {
+        "rows": 5816,
+        "frauds": 463,
+        "fraud_rate": 0.0796079779917469,
+        "recall_at_5pct": 0.4514038876889849,
+        "precision_at_5pct": 0.718213058419244,
+        "review_count": 291
+      },
+      "fusion": {
+        "rows": 5816,
+        "frauds": 463,
+        "fraud_rate": 0.0796079779917469,
+        "recall_at_5pct": 0.45788336933045354,
+        "precision_at_5pct": 0.7285223367697594,
+        "review_count": 291
+      },
+      "delta_recall": 0.006479481641468665,
+      "delta_precision": 0.010309278350515427
+    },
+    {
+      "segment": "velocity_1h",
+      "baseline": {
+        "rows": 21513,
+        "frauds": 1177,
+        "fraud_rate": 0.05471110491330823,
+        "recall_at_5pct": 0.5216652506372133,
+        "precision_at_5pct": 0.570631970260223,
+        "review_count": 1076
+      },
+      "fusion": {
+        "rows": 21513,
+        "frauds": 1177,
+        "fraud_rate": 0.05471110491330823,
+        "recall_at_5pct": 0.530161427357689,
+        "precision_at_5pct": 0.5799256505576208,
+        "review_count": 1076
+      },
+      "delta_recall": 0.008496176720475757,
+      "delta_precision": 0.009293680297397744
+    },
+    {
+      "segment": "velocity_24h",
+      "baseline": {
+        "rows": 41316,
+        "frauds": 1936,
+        "fraud_rate": 0.046858359957401494,
+        "recall_at_5pct": 0.5304752066115702,
+        "precision_at_5pct": 0.49709583736689256,
+        "review_count": 2066
+      },
+      "fusion": {
+        "rows": 41316,
+        "frauds": 1936,
+        "fraud_rate": 0.046858359957401494,
+        "recall_at_5pct": 0.53150826446281,
+        "precision_at_5pct": 0.49806389157792835,
+        "review_count": 2066
+      },
+      "delta_recall": 0.0010330578512397492,
+      "delta_precision": 0.0009680542110357959
+    },
+    {
+      "segment": "shared_device_10plus_cards",
+      "baseline": {
+        "rows": 7405,
+        "frauds": 819,
+        "fraud_rate": 0.11060094530722485,
+        "recall_at_5pct": 0.36507936507936506,
+        "precision_at_5pct": 0.8059299191374663,
+        "review_count": 371
+      },
+      "fusion": {
+        "rows": 7405,
+        "frauds": 819,
+        "fraud_rate": 0.11060094530722485,
+        "recall_at_5pct": 0.3724053724053724,
+        "precision_at_5pct": 0.8221024258760108,
+        "review_count": 371
+      },
+      "delta_recall": 0.0073260073260073555,
+      "delta_precision": 0.016172506738544534
+    },
+    {
+      "segment": "shared_device_20plus_cards",
+      "baseline": {
+        "rows": 6749,
+        "frauds": 703,
+        "fraud_rate": 0.10416357978959846,
+        "recall_at_5pct": 0.3869132290184922,
+        "precision_at_5pct": 0.8047337278106509,
+        "review_count": 338
+      },
+      "fusion": {
+        "rows": 6749,
+        "frauds": 703,
+        "fraud_rate": 0.10416357978959846,
+        "recall_at_5pct": 0.39544807965860596,
+        "precision_at_5pct": 0.8224852071005917,
+        "review_count": 338
+      },
+      "delta_recall": 0.008534850640113778,
+      "delta_precision": 0.017751479289940808
+    }
+  ],
+  "worst_fusion_segments_by_recall": [
+    {
+      "segment": "high_amount_gt_200",
+      "baseline": {
+        "rows": 8510,
+        "frauds": 452,
+        "fraud_rate": 0.053113983548766154,
+        "recall_at_5pct": 0.5199115044247787,
+        "precision_at_5pct": 0.5516431924882629,
+        "review_count": 426
+      },
+      "fusion": {
+        "rows": 8510,
+        "frauds": 452,
+        "fraud_rate": 0.053113983548766154,
+        "recall_at_5pct": 0.504424778761062,
+        "precision_at_5pct": 0.5352112676056338,
+        "review_count": 426
+      },
+      "delta_recall": -0.015486725663716783,
+      "delta_precision": -0.016431924882629123
+    },
+    {
+      "segment": "new_card_device_pair",
+      "baseline": {
+        "rows": 45967,
+        "frauds": 1482,
+        "fraud_rate": 0.032240520373311286,
+        "recall_at_5pct": 0.524966261808367,
+        "precision_at_5pct": 0.3384080034797738,
+        "review_count": 2299
+      },
+      "fusion": {
+        "rows": 45967,
+        "frauds": 1482,
+        "fraud_rate": 0.032240520373311286,
+        "recall_at_5pct": 0.5148448043184886,
+        "precision_at_5pct": 0.33188342757720746,
+        "review_count": 2299
+      },
+      "delta_recall": -0.010121457489878471,
+      "delta_precision": -0.006524575902566332
+    },
+    {
+      "segment": "known_device",
+      "baseline": {
+        "rows": 52627,
+        "frauds": 2233,
+        "fraud_rate": 0.042430691470157905,
+        "recall_at_5pct": 0.541871921182266,
+        "precision_at_5pct": 0.45972644376899696,
+        "review_count": 2632
+      },
+      "fusion": {
+        "rows": 52627,
+        "frauds": 2233,
+        "fraud_rate": 0.042430691470157905,
+        "recall_at_5pct": 0.5405284370801612,
+        "precision_at_5pct": 0.45858662613981765,
+        "review_count": 2632
+      },
+      "delta_recall": -0.0013434841021048305,
+      "delta_precision": -0.0011398176291793072
+    },
+    {
+      "segment": "new_card",
+      "baseline": {
+        "rows": 430,
+        "frauds": 15,
+        "fraud_rate": 0.03488372093023256,
+        "recall_at_5pct": 0.3333333333333333,
+        "precision_at_5pct": 0.22727272727272727,
+        "review_count": 22
+      },
+      "fusion": {
+        "rows": 430,
+        "frauds": 15,
+        "fraud_rate": 0.03488372093023256,
+        "recall_at_5pct": 0.3333333333333333,
+        "precision_at_5pct": 0.22727272727272727,
+        "review_count": 22
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    },
+    {
+      "segment": "known_card",
+      "baseline": {
+        "rows": 52276,
+        "frauds": 2226,
+        "fraud_rate": 0.04258168184252812,
+        "recall_at_5pct": 0.5435759209344115,
+        "precision_at_5pct": 0.4628921193573068,
+        "review_count": 2614
+      },
+      "fusion": {
+        "rows": 52276,
+        "frauds": 2226,
+        "fraud_rate": 0.04258168184252812,
+        "recall_at_5pct": 0.5435759209344115,
+        "precision_at_5pct": 0.4628921193573068,
+        "review_count": 2614
+      },
+      "delta_recall": 0.0,
+      "delta_precision": 0.0
+    }
+  ],
+  "best_fusion_segments_by_recall": [
+    {
+      "segment": "shared_device_20plus_cards",
+      "baseline": {
+        "rows": 6749,
+        "frauds": 703,
+        "fraud_rate": 0.10416357978959846,
+        "recall_at_5pct": 0.3869132290184922,
+        "precision_at_5pct": 0.8047337278106509,
+        "review_count": 338
+      },
+      "fusion": {
+        "rows": 6749,
+        "frauds": 703,
+        "fraud_rate": 0.10416357978959846,
+        "recall_at_5pct": 0.39544807965860596,
+        "precision_at_5pct": 0.8224852071005917,
+        "review_count": 338
+      },
+      "delta_recall": 0.008534850640113778,
+      "delta_precision": 0.017751479289940808
+    },
+    {
+      "segment": "velocity_1h",
+      "baseline": {
+        "rows": 21513,
+        "frauds": 1177,
+        "fraud_rate": 0.05471110491330823,
+        "recall_at_5pct": 0.5216652506372133,
+        "precision_at_5pct": 0.570631970260223,
+        "review_count": 1076
+      },
+      "fusion": {
+        "rows": 21513,
+        "frauds": 1177,
+        "fraud_rate": 0.05471110491330823,
+        "recall_at_5pct": 0.530161427357689,
+        "precision_at_5pct": 0.5799256505576208,
+        "review_count": 1076
+      },
+      "delta_recall": 0.008496176720475757,
+      "delta_precision": 0.009293680297397744
+    },
+    {
+      "segment": "shared_device_10plus_cards",
+      "baseline": {
+        "rows": 7405,
+        "frauds": 819,
+        "fraud_rate": 0.11060094530722485,
+        "recall_at_5pct": 0.36507936507936506,
+        "precision_at_5pct": 0.8059299191374663,
+        "review_count": 371
+      },
+      "fusion": {
+        "rows": 7405,
+        "frauds": 819,
+        "fraud_rate": 0.11060094530722485,
+        "recall_at_5pct": 0.3724053724053724,
+        "precision_at_5pct": 0.8221024258760108,
+        "review_count": 371
+      },
+      "delta_recall": 0.0073260073260073555,
+      "delta_precision": 0.016172506738544534
+    },
+    {
+      "segment": "amount_gt_2x_card_avg",
+      "baseline": {
+        "rows": 5816,
+        "frauds": 463,
+        "fraud_rate": 0.0796079779917469,
+        "recall_at_5pct": 0.4514038876889849,
+        "precision_at_5pct": 0.718213058419244,
+        "review_count": 291
+      },
+      "fusion": {
+        "rows": 5816,
+        "frauds": 463,
+        "fraud_rate": 0.0796079779917469,
+        "recall_at_5pct": 0.45788336933045354,
+        "precision_at_5pct": 0.7285223367697594,
+        "review_count": 291
+      },
+      "delta_recall": 0.006479481641468665,
+      "delta_precision": 0.010309278350515427
+    },
+    {
+      "segment": "high_amount_gt_500",
+      "baseline": {
+        "rows": 2003,
+        "frauds": 168,
+        "fraud_rate": 0.08387418871692462,
+        "recall_at_5pct": 0.5,
+        "precision_at_5pct": 0.8316831683168316,
+        "review_count": 101
+      },
+      "fusion": {
+        "rows": 2003,
+        "frauds": 168,
+        "fraud_rate": 0.08387418871692462,
+        "recall_at_5pct": 0.5059523809523809,
+        "precision_at_5pct": 0.8415841584158416,
+        "review_count": 101
+      },
+      "delta_recall": 0.005952380952380931,
+      "delta_precision": 0.00990099009900991
+    }
+  ],
+  "interpretation": {
+    "purpose": "Identify temporal segments where behavioral fusion loses recall or precision versus the calibrated-model baseline at fixed 5% review capacity.",
+    "do_not_use_test_for_tuning": true,
+    "next_step": "Use the worst stability segments to design a conservative behavioral overlay, then re-test on the untouched test set."
+  }
+}
