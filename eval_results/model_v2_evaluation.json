@@ -1,0 +1,68 @@
+{
+  "model": "fraud_xgboost_v2",
+  "feature_count": 32,
+  "features": [
+    "TransactionAmt",
+    "TransactionAmt_log",
+    "transaction_hour",
+    "transaction_day",
+    "has_identity",
+    "missing_card_info",
+    "missing_address",
+    "missing_value_count",
+    "card_transaction_count",
+    "card_avg_amount",
+    "amount_vs_card_avg",
+    "new_card",
+    "card_txn_count_1h",
+    "card_txn_count_24h",
+    "has_device_info",
+    "device_profile_count",
+    "device_profile_unique_cards",
+    "new_device_profile",
+    "card_device_transaction_count",
+    "card_device_seen_before",
+    "device_unique_cards_historical",
+    "amount_vs_card_avg_log",
+    "card_amount_std",
+    "amount_vs_card_zscore",
+    "card_max_amount_ratio",
+    "card_min_amount_ratio",
+    "card_txn_rate_1h",
+    "card_txn_rate_24h",
+    "device_card_share_ratio",
+    "amount_x_velocity_1h",
+    "amount_x_velocity_24h",
+    "amount_x_device_cards"
+  ],
+  "validation": {
+    "ROC_AUC": 0.816213601645392,
+    "PR_AUC": 0.30374324415600784,
+    "Precision": 0.6414728682170543,
+    "Recall": 0.10711974110032363,
+    "F1_Score": 0.18358291735995563,
+    "False_Positive_Rate": 0.002562184920503019,
+    "False_Negative_Rate": 0.8928802588996764,
+    "Confusion_Matrix": {
+      "TN": 72019,
+      "FP": 185,
+      "FN": 2759,
+      "TP": 331
+    }
+  },
+  "test": {
+    "ROC_AUC": 0.779820384225699,
+    "PR_AUC": 0.18674885263121063,
+    "Precision": 0.47752808988764045,
+    "Recall": 0.06530925854782943,
+    "F1_Score": 0.11490368367691788,
+    "False_Positive_Rate": 0.002558776189624575,
+    "False_Negative_Rate": 0.9346907414521706,
+    "Confusion_Matrix": {
+      "TN": 72505,
+      "FP": 186,
+      "FN": 2433,
+      "TP": 170
+    }
+  }
+}
