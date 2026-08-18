@@ -8,5 +8,6 @@ joblib==1.5.1
 groq
 pydantic-settings
 fastapi
+shap==0.48.0
 uvicorn
 python-dotenv==1.1.1
