@@ -11,32 +11,33 @@ from src.services.decision_engine import DecisionEngine
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+TRANSACTIONS_PATH = PROJECT_ROOT / "data" / "raw" / "train_transaction.csv"
+IDENTITY_PATH = PROJECT_ROOT / "data" / "raw" / "train_identity.csv"
+HISTORY_PATH = PROJECT_ROOT / "data" / "investigation_history.csv"
+RISK_PATH = PROJECT_ROOT / "data" / "risk_assessments.json"
 
-TRANSACTIONS_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "raw"
-    / "train_transaction.csv"
-)
+# Only these transaction columns are required at runtime for historical
+# behavior, cold-start detection, and transaction lookup.  The complete
+# original transaction schema is read from the CSV header only so that
+# missing_value_count remains based on the original 394-column schema.
+HISTORICAL_TRANSACTION_COLUMNS = [
+    "TransactionID",
+    "TransactionDT",
+    "TransactionAmt",
+    "card1",
+    "card2",
+    "card3",
+    "card4",
+    "card5",
+    "card6",
+    "addr1",
+    "addr2",
+]
 
-IDENTITY_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "raw"
-    / "train_identity.csv"
-)
-
-HISTORY_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "investigation_history.csv"
-)
-
-RISK_PATH = (
-    PROJECT_ROOT
-    / "data"
-    / "risk_assessments.json"
-)
+IDENTITY_COLUMNS = [
+    "TransactionID",
+    "DeviceInfo",
+]
 
 
 class AppContainer:
@@ -48,14 +49,13 @@ class AppContainer:
         self.raw_transactions = None
         self.identity = None
         self.transactions = None
+        self.raw_transaction_columns = None
         self.investigation_history = None
         self.risk_assessments = None
 
-        # Architecture services
         self.cold_start_detector = None
         self.rule_engine = None
         self.decision_engine = None
-
         self.agent = None
 
     def load_model(self):
@@ -68,68 +68,100 @@ class AppContainer:
         print(f"Model features: {len(self.features)}")
 
     def load_data(self):
-        if not TRANSACTIONS_PATH.exists():
-            raise FileNotFoundError(f"Transaction data not found: {TRANSACTIONS_PATH}")
+        for path, label in [
+            (TRANSACTIONS_PATH, "Transaction data"),
+            (IDENTITY_PATH, "Identity data"),
+            (HISTORY_PATH, "Investigation history"),
+            (RISK_PATH, "Risk assessments"),
+        ]:
+            if not path.exists():
+                raise FileNotFoundError(f"{label} not found: {path}")
 
-        if not IDENTITY_PATH.exists():
-            raise FileNotFoundError(f"Identity data not found: {IDENTITY_PATH}")
+        print("\nLoading ORIGINAL transaction schema...")
+        # Read only the CSV header.  This gives us the exact original
+        # transaction schema without allocating a 590k x 394 dataframe.
+        self.raw_transaction_columns = pd.read_csv(
+            TRANSACTIONS_PATH,
+            nrows=0,
+        ).columns.tolist()
+        print(f"Original transaction columns: {len(self.raw_transaction_columns)}")
 
-        if not HISTORY_PATH.exists():
-            raise FileNotFoundError(f"Investigation history not found: {HISTORY_PATH}")
+        missing_runtime_columns = [
+            column
+            for column in HISTORICAL_TRANSACTION_COLUMNS
+            if column not in self.raw_transaction_columns
+        ]
+        if missing_runtime_columns:
+            raise ValueError(
+                "Transaction CSV is missing runtime columns: "
+                f"{missing_runtime_columns}"
+            )
 
-        if not RISK_PATH.exists():
-            raise FileNotFoundError(f"Risk assessments not found: {RISK_PATH}")
+        print("\nLoading COMPACT historical transaction data...")
+        self.raw_transactions = pd.read_csv(
+            TRANSACTIONS_PATH,
+            usecols=HISTORICAL_TRANSACTION_COLUMNS,
+            engine="pyarrow",
+        )
+        print(f"Compact transaction shape: {self.raw_transactions.shape}")
+        print(f"Transaction columns loaded: {len(self.raw_transactions.columns)}")
 
-        print("\nLoading ORIGINAL transaction data...")
-        self.raw_transactions = pd.read_csv(TRANSACTIONS_PATH, engine="pyarrow")
-        print(f"Raw transaction shape: {self.raw_transactions.shape}")
+        print("\nLoading COMPACT identity data...")
+        available_identity_columns = pd.read_csv(
+            IDENTITY_PATH,
+            nrows=0,
+        ).columns.tolist()
+        missing_identity_columns = [
+            column
+            for column in IDENTITY_COLUMNS
+            if column not in available_identity_columns
+        ]
+        if missing_identity_columns:
+            raise ValueError(
+                "Identity CSV is missing runtime columns: "
+                f"{missing_identity_columns}"
+            )
 
-        print("\nLoading identity data...")
-        self.identity = pd.read_csv(IDENTITY_PATH, engine="pyarrow")
+        self.identity = pd.read_csv(
+            IDENTITY_PATH,
+            usecols=IDENTITY_COLUMNS,
+            engine="pyarrow",
+        )
         print(f"Identity shape: {self.identity.shape}")
 
-        print("\nMerging transaction + identity...")
-        if "TransactionID" not in self.raw_transactions.columns:
-            raise ValueError("Transaction data does not contain 'TransactionID'.")
-
-        if "TransactionID" not in self.identity.columns:
-            raise ValueError("Identity data does not contain 'TransactionID'.")
-
-        identity_columns = [
-            col for col in self.identity.columns if col != "TransactionID"
-        ]
-
-        identity_for_merge = self.identity[
-            ["TransactionID", *identity_columns]
-        ].drop_duplicates(subset=["TransactionID"], keep="first")
+        print("\nAttaching DeviceInfo to compact transaction history...")
+        identity_device = self.identity.drop_duplicates(
+            subset=["TransactionID"],
+            keep="first",
+        )
 
         self.transactions = self.raw_transactions.merge(
-            identity_for_merge,
+            identity_device,
             on="TransactionID",
             how="left",
             sort=False,
         )
 
-        print(f"Merged transaction shape: {self.transactions.shape}")
+        print(f"Runtime transaction shape: {self.transactions.shape}")
+        print(f"Runtime transaction columns: {len(self.transactions.columns)}")
+        print(
+            "Runtime schema: compact history + DeviceInfo; "
+            f"original schema retained separately ({len(self.raw_transaction_columns)} columns)"
+        )
 
         print("\nLoading investigation history...")
         self.investigation_history = pd.read_csv(HISTORY_PATH)
 
         print("\nLoading risk assessments...")
-        with open(RISK_PATH, "r") as f:
+        with open(RISK_PATH, "r", encoding="utf-8") as f:
             raw_risk = json.load(f)
 
-        self.risk_assessments = {
-            int(k): v for k, v in raw_risk.items()
-        }
+        self.risk_assessments = {int(k): v for k, v in raw_risk.items()}
 
     def init_services(self):
-        """
-        Initialize ColdStartDetector, RuleEngine, and DecisionEngine.
-        """
         print("\nInitializing ColdStartDetector...")
         self.cold_start_detector = ColdStartDetector(
-            transactions=self.raw_transactions,
+            transactions=self.transactions,
             identity=self.identity,
         )
         print("Cold-start detector initialized")
@@ -156,7 +188,8 @@ class AppContainer:
         print("Features loaded:", len(self.features) if self.features else 0)
         print("Raw transactions loaded:", self.raw_transactions.shape if self.raw_transactions is not None else None)
         print("Identity loaded:", self.identity.shape if self.identity is not None else None)
-        print("Merged transactions loaded:", self.transactions.shape if self.transactions is not None else None)
+        print("Merged runtime transactions loaded:", self.transactions.shape if self.transactions is not None else None)
+        print("Original transaction schema columns:", len(self.raw_transaction_columns or []))
         print("Cold-start detector ready:", self.cold_start_detector is not None)
         print("Rule engine ready:", self.rule_engine is not None)
         print("Decision engine ready:", self.decision_engine is not None)
