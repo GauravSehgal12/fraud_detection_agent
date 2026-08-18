@@ -16,7 +16,8 @@ from sklearn.metrics import (
     confusion_matrix,
     brier_score_loss,
 )
-from sklearn.calibration import calibration_curve, IsotonicRegression
+from sklearn.calibration import calibration_curve
+from sklearn.isotonic import IsotonicRegression
 import xgboost as xgb
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

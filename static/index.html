@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Fraud Risk Dashboard</title>
+    <!-- Modern Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Main Styles -->
+    <link rel="stylesheet" href="/dashboard/style.css">
+    <!-- Marked for Markdown Rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <!-- Background Elements for Premium Look -->
+    <div class="bg-shape shape-1"></div>
+    <div class="bg-shape shape-2"></div>
+    <div class="bg-shape shape-3"></div>
+
+    <div class="container">
+        <header class="glass-panel">
+            <div class="logo">
+                <div class="logo-icon"></div>
+                <h1>Fraud Detection<span>Agent</span></h1>
+            </div>
+            <div class="search-bar">
+                <input type="text" id="transactionId" placeholder="Enter Transaction ID (e.g., 3409570)" onkeypress="handleKeyPress(event)">
+                <button onclick="investigateTransaction()" id="searchBtn">
+                    <span class="btn-text">Investigate</span>
+                    <span class="loader hidden"></span>
+                </button>
+            </div>
+        </header>
+
+        <main id="dashboardContent" class="dashboard-grid hidden">
+            <!-- Left Column: Risk & Decision -->
+            <div class="col-left">
+                <!-- Final Decision Card -->
+                <div class="glass-panel card decision-card" id="decisionCard">
+                    <h3>Final Decision</h3>
+                    <div class="decision-value" id="finalDecisionValue">REVIEW</div>
+                    <div class="decision-badge" id="decisionBadge">High Risk</div>
+                </div>
+
+                <!-- Risk Scores Card -->
+                <div class="glass-panel card risk-card">
+                    <h3>Risk Assessment</h3>
+                    <div class="scores-container">
+                        <div class="score-box model-score">
+                            <h4>Model Risk</h4>
+                            <div class="gauge">
+                                <div class="gauge-fill" id="modelGaugeFill"></div>
+                                <div class="gauge-value" id="modelScoreValue">0.00</div>
+                            </div>
+                            <div class="level-indicator" id="modelLevelIndicator">LOW</div>
+                        </div>
+                        <div class="score-box behavior-score">
+                            <h4>Behavioral Risk</h4>
+                            <div class="gauge">
+                                <div class="gauge-fill" id="behaviorGaugeFill"></div>
+                                <div class="gauge-value" id="behaviorScoreValue">0.00</div>
+                            </div>
+                            <div class="level-indicator" id="behaviorLevelIndicator">LOW</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cold Start Card -->
+                <div class="glass-panel card cold-start-card">
+                    <h3>Context Signals</h3>
+                    <ul class="signal-list" id="coldStartList">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
+
+                <!-- Triggered Rules Card -->
+                <div class="glass-panel card rules-card">
+                    <h3>Triggered Rules</h3>
+                    <div id="rulesContainer" class="rules-container">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Column: Report & Feedback -->
+            <div class="col-right">
+                <!-- AI Report Card -->
+                <div class="glass-panel card report-card">
+                    <h3>AI Investigation Report</h3>
+                    <div class="report-content markdown-body" id="reportContent">
+                        <!-- Markdown Rendered Here -->
+                    </div>
+                </div>
+
+                <!-- Analyst Feedback Card -->
+                <div class="glass-panel card feedback-card">
+                    <h3>Submit Analyst Feedback</h3>
+                    <form id="feedbackForm" onsubmit="submitFeedback(event)">
+                        <div class="form-group">
+                            <label for="feedbackLabel">Conclusion</label>
+                            <select id="feedbackLabel" required>
+                                <option value="" disabled selected>Select an option...</option>
+                                <option value="CONFIRMED_FRAUD">Confirmed Fraud</option>
+                                <option value="FALSE_POSITIVE">False Positive</option>
+                                <option value="LEGITIMATE">Legitimate</option>
+                                <option value="NEEDS_MORE_INFORMATION">Needs More Information</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="feedbackComment">Analyst Notes</label>
+                            <textarea id="feedbackComment" rows="3" placeholder="Explain your decision..."></textarea>
+                        </div>
+                        <button type="submit" class="submit-btn" id="feedbackBtn">Submit Feedback</button>
+                        <div id="feedbackStatus" class="feedback-status"></div>
+                    </form>
+                </div>
+            </div>
+        </main>
+
+        <div id="welcomeState" class="welcome-state glass-panel">
+            <h2>Financial Fraud Intelligence</h2>
+            <p>Enter a Transaction ID above to initiate an AI-driven investigation.</p>
+            <div class="demo-ids">
+                Try: <span class="clickable-id" onclick="setAndSearch(3409570)">3409570</span> (Existing) or 
+                <span class="clickable-id" onclick="setAndSearch(999999997)">999999997</span> (Cold Start)
+            </div>
+        </div>
+    </div>
+
+    <script src="/dashboard/app.js"></script>
+</body>
+</html>
