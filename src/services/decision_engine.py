@@ -2,49 +2,45 @@ from typing import Any
 
 
 class DecisionEngine:
+    """Final deterministic policy over a continuous fused risk score."""
 
-    def __init__(self):
-        """
-        Deterministic decision engine combining ML model risk score,
-        behavioral rule evaluation, and cold-start signals.
-        """
-        pass
+    def __init__(
+        self,
+        review_threshold: float = 0.50,
+        high_threshold: float = 0.80,
+    ):
+        self.review_threshold = float(review_threshold)
+        self.high_threshold = float(high_threshold)
 
     def decide(
         self,
         model_risk_score: float,
-        model_risk_level: str,
-        behavioral_risk_level: str,
+        model_risk_level: str | None = None,
+        behavioral_risk_level: str | None = None,
         cold_start_status: dict[str, Any] | None = None,
         rules_triggered: list[dict[str, Any]] | None = None,
+        final_risk_score: float | None = None,
     ) -> str:
         """
-        Determine final action: "APPROVE" or "REVIEW".
+        Return APPROVE or REVIEW from the continuous fused score.
 
-        Policy:
-        - model risk >= 0.90 -> REVIEW
-        - model risk >= 0.70 -> REVIEW
-        - model LOW + behavioral HIGH -> REVIEW
-        - model LOW + behavioral MEDIUM -> REVIEW
-        - model LOW + behavioral LOW -> APPROVE
+        ``final_risk_score`` is preferred. The older model/behavioral arguments
+        remain accepted for backward compatibility with existing callers.
         """
-        if rules_triggered is None:
-            rules_triggered = []
+        if final_risk_score is not None:
+            return "REVIEW" if float(final_risk_score) >= self.review_threshold else "APPROVE"
 
-        if cold_start_status is None:
-            cold_start_status = {}
-
-        # High or Medium model risk always triggers REVIEW
-        if model_risk_score >= 0.70 or model_risk_level in ["HIGH", "MEDIUM"]:
+        # Backward-compatible fallback for callers that have not migrated to fusion.
+        if float(model_risk_score) >= self.review_threshold:
             return "REVIEW"
-
-        # Model risk is LOW: check behavioral risk & cold start rules
-        if behavioral_risk_level in ["HIGH", "MEDIUM"]:
+        if behavioral_risk_level in {"HIGH", "MEDIUM"}:
             return "REVIEW"
-
-        # If NEW_CARD_NEW_DEVICE or NEW_CARD_NEW_DEVICE_HIGH_AMOUNT triggered, escalate to REVIEW
-        rule_ids = {r.get("rule_id") for r in rules_triggered}
-        if "NEW_CARD_NEW_DEVICE" in rule_ids or "NEW_CARD_NEW_DEVICE_HIGH_AMOUNT" in rule_ids:
-            return "REVIEW"
-
         return "APPROVE"
+
+    def classify(self, final_risk_score: float) -> str:
+        score = float(final_risk_score)
+        if score >= self.high_threshold:
+            return "HIGH"
+        if score >= self.review_threshold:
+            return "MEDIUM"
+        return "LOW"
