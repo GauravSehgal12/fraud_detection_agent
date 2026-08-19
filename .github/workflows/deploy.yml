@@ -29,12 +29,32 @@ jobs:
           fi
 
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_deploy_key
+
+          # Normalize line endings in case the PEM was pasted from Windows.
+          printf '%s\n' "$EC2_SSH_KEY" | tr -d '\r' > ~/.ssh/ec2_deploy_key
           chmod 600 ~/.ssh/ec2_deploy_key
 
-          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+          echo "Validating SSH private key format..."
+          ssh-keygen -y -f ~/.ssh/ec2_deploy_key > /dev/null
 
-          ssh -i ~/.ssh/ec2_deploy_key "$EC2_USER@$EC2_HOST" 'bash -s' <<'REMOTE_SCRIPT'
+          echo "Registering EC2 host key..."
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          echo "Testing SSH connection to EC2..."
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=15 \
+            -i ~/.ssh/ec2_deploy_key \
+            "$EC2_USER@$EC2_HOST" 'echo "EC2 SSH connection successful"'
+
+          echo "Running deployment on EC2..."
+          ssh \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o ConnectTimeout=15 \
+            -i ~/.ssh/ec2_deploy_key \
+            "$EC2_USER@$EC2_HOST" 'bash -s' <<'REMOTE_SCRIPT'
           set -euo pipefail
 
           IMAGE="ghcr.io/gauravsehgal12/fraud_detection_agent:v1"
@@ -50,6 +70,9 @@ jobs:
           test -f "$DATA_DIR/raw/train_identity.csv"
           test -f "$DATA_DIR/investigation_history.csv"
           test -f "$DATA_DIR/risk_assessments.json"
+
+          echo "Checking Docker availability..."
+          docker info > /dev/null
 
           echo "Stopping existing container if present..."
           docker rm -f "$CONTAINER" 2>/dev/null || true
