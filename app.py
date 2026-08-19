@@ -1,3 +1,4 @@
+import os
 from contextlib import asynccontextmanager
 
 # pyrefly: ignore [missing-import]
@@ -17,6 +18,18 @@ container = AppContainer()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("Starting Financial Fraud Risk API...")
+
+    # CI smoke tests verify that the Docker image, Python imports, FastAPI,
+    # static files, and lightweight application wiring work. The production
+    # dataset is intentionally not stored in GitHub, so CI can skip the
+    # heavy data/model initialization and LLM startup.
+    ci_smoke_test = os.getenv("CI_SMOKE_TEST", "false").lower() == "true"
+
+    if ci_smoke_test:
+        print("CI_SMOKE_TEST=true: starting lightweight API smoke-test mode")
+        yield
+        print("Shutting down Financial Fraud Risk API...")
+        return
 
     container.load_all()
 
