@@ -1,0 +1,83 @@
+name: Deploy to EC2
+
+on:
+  workflow_run:
+    workflows: ["Docker CI"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy validated image to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_USER" ] || [ -z "$EC2_SSH_KEY" ]; then
+            echo "Missing EC2_HOST, EC2_USER, or EC2_SSH_KEY GitHub secret."
+            exit 1
+          fi
+
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" > ~/.ssh/ec2_deploy_key
+          chmod 600 ~/.ssh/ec2_deploy_key
+
+          ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
+
+          ssh -i ~/.ssh/ec2_deploy_key "$EC2_USER@$EC2_HOST" 'bash -s' <<'REMOTE_SCRIPT'
+          set -euo pipefail
+
+          IMAGE="ghcr.io/gauravsehgal12/fraud_detection_agent:v1"
+          CONTAINER="fraud-detection-agent"
+          DATA_DIR="/app-data"
+
+          echo "Pulling validated image..."
+          docker pull "$IMAGE"
+
+          echo "Checking production data..."
+          test -f "$DATA_DIR/.env"
+          test -f "$DATA_DIR/raw/train_transaction.csv"
+          test -f "$DATA_DIR/raw/train_identity.csv"
+          test -f "$DATA_DIR/investigation_history.csv"
+          test -f "$DATA_DIR/risk_assessments.json"
+
+          echo "Stopping existing container if present..."
+          docker rm -f "$CONTAINER" 2>/dev/null || true
+
+          echo "Starting new container..."
+          docker run -d \
+            --name "$CONTAINER" \
+            --restart unless-stopped \
+            -p 8000:8000 \
+            --env-file "$DATA_DIR/.env" \
+            -v "$DATA_DIR:/app/data" \
+            "$IMAGE"
+
+          echo "Waiting for application health..."
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:8000/ >/tmp/fraud_health.json; then
+              echo "Application is healthy."
+              cat /tmp/fraud_health.json
+              exit 0
+            fi
+            echo "Waiting for startup ($i/60)..."
+            sleep 5
+          done
+
+          echo "Deployment health check failed."
+          docker ps -a --filter "name=$CONTAINER"
+          docker logs --tail 200 "$CONTAINER"
+          exit 1
+          REMOTE_SCRIPT
+
+          rm -f ~/.ssh/ec2_deploy_key
