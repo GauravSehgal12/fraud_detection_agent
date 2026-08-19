@@ -31,26 +31,23 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Start container
-        env:
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
           docker run -d \
             --name fraud-detection-agent-ci \
             -p 8000:8000 \
-            -e GROQ_API_KEY="$GROQ_API_KEY" \
-            -v "${GITHUB_WORKSPACE}/data:/app/data" \
+            -e CI_SMOKE_TEST=true \
             fraud-detection-agent:ci
 
       - name: Wait for application startup
         shell: bash
         run: |
-          for i in {1..60}; do
+          for i in {1..30}; do
             if curl -fsS http://localhost:8000/ > /tmp/health_response.json; then
               echo "Application is ready"
               cat /tmp/health_response.json
               exit 0
             fi
-            echo "Waiting for application startup ($i/60)..."
+            echo "Waiting for application startup ($i/30)..."
             sleep 2
           done
 
