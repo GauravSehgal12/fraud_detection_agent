@@ -17,9 +17,9 @@ HISTORY_PATH = PROJECT_ROOT / "data" / "investigation_history.csv"
 RISK_PATH = PROJECT_ROOT / "data" / "risk_assessments.json"
 
 # Only these transaction columns are required at runtime for historical
-# behavior, cold-start detection, and transaction lookup.  The complete
+# behavior, cold-start detection, and transaction lookup. The complete
 # original transaction schema is read from the CSV header only so that
-# missing_value_count remains based on the original 394-column schema.
+# missing_value_count can still use the original 394-column schema.
 HISTORICAL_TRANSACTION_COLUMNS = [
     "TransactionID",
     "TransactionDT",
@@ -34,25 +34,37 @@ HISTORICAL_TRANSACTION_COLUMNS = [
     "addr2",
 ]
 
-IDENTITY_COLUMNS = [
-    "TransactionID",
-    "DeviceInfo",
-]
+IDENTITY_COLUMNS = ["TransactionID", "DeviceInfo"]
+
+# Explicit dtypes prevent pandas from widening numeric columns while reading
+# and substantially reduce the peak memory required by the Docker container.
+TRANSACTION_DTYPES = {
+    "TransactionID": "int64",
+    "TransactionDT": "int64",
+    "TransactionAmt": "float32",
+    "card1": "int32",
+    "card2": "float32",
+    "card3": "float32",
+    "card4": "string",
+    "card5": "float32",
+    "card6": "string",
+    "addr1": "float32",
+    "addr2": "float32",
+}
+
+IDENTITY_DTYPES = {"TransactionID": "int64", "DeviceInfo": "string"}
 
 
 class AppContainer:
-
     def __init__(self):
         self.model = None
         self.features = None
-
         self.raw_transactions = None
         self.identity = None
         self.transactions = None
         self.raw_transaction_columns = None
         self.investigation_history = None
         self.risk_assessments = None
-
         self.cold_start_detector = None
         self.rule_engine = None
         self.decision_engine = None
@@ -78,11 +90,10 @@ class AppContainer:
                 raise FileNotFoundError(f"{label} not found: {path}")
 
         print("\nLoading ORIGINAL transaction schema...")
-        # Read only the CSV header.  This gives us the exact original
-        # transaction schema without allocating a 590k x 394 dataframe.
         self.raw_transaction_columns = pd.read_csv(
             TRANSACTIONS_PATH,
             nrows=0,
+            engine="c",
         ).columns.tolist()
         print(f"Original transaction columns: {len(self.raw_transaction_columns)}")
 
@@ -98,10 +109,16 @@ class AppContainer:
             )
 
         print("\nLoading COMPACT historical transaction data...")
+        # Do not use the pyarrow CSV engine here. It can create a large native
+        # allocation for this CSV even when usecols is small. The C parser with
+        # explicit dtypes has a much lower peak memory footprint in this
+        # container and still loads only 11 of the original 394 columns.
         self.raw_transactions = pd.read_csv(
             TRANSACTIONS_PATH,
             usecols=HISTORICAL_TRANSACTION_COLUMNS,
-            engine="pyarrow",
+            dtype=TRANSACTION_DTYPES,
+            engine="c",
+            low_memory=True,
         )
         print(f"Compact transaction shape: {self.raw_transactions.shape}")
         print(f"Transaction columns loaded: {len(self.raw_transactions.columns)}")
@@ -110,10 +127,10 @@ class AppContainer:
         available_identity_columns = pd.read_csv(
             IDENTITY_PATH,
             nrows=0,
+            engine="c",
         ).columns.tolist()
         missing_identity_columns = [
-            column
-            for column in IDENTITY_COLUMNS
+            column for column in IDENTITY_COLUMNS
             if column not in available_identity_columns
         ]
         if missing_identity_columns:
@@ -125,7 +142,9 @@ class AppContainer:
         self.identity = pd.read_csv(
             IDENTITY_PATH,
             usecols=IDENTITY_COLUMNS,
-            engine="pyarrow",
+            dtype=IDENTITY_DTYPES,
+            engine="c",
+            low_memory=True,
         )
         print(f"Identity shape: {self.identity.shape}")
 
@@ -134,7 +153,6 @@ class AppContainer:
             subset=["TransactionID"],
             keep="first",
         )
-
         self.transactions = self.raw_transactions.merge(
             identity_device,
             on="TransactionID",
@@ -155,7 +173,6 @@ class AppContainer:
         print("\nLoading risk assessments...")
         with open(RISK_PATH, "r", encoding="utf-8") as f:
             raw_risk = json.load(f)
-
         self.risk_assessments = {int(k): v for k, v in raw_risk.items()}
 
     def init_services(self):
@@ -194,7 +211,6 @@ class AppContainer:
         print("Rule engine ready:", self.rule_engine is not None)
         print("Decision engine ready:", self.decision_engine is not None)
         print("==========================================\n")
-
         return self
 
     def is_ready(self) -> bool:
